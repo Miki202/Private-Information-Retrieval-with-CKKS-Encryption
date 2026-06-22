@@ -1,287 +1,108 @@
-"""
-Search страница - търсене на подобни превозни средства
-"""
 import streamlit as st
-import sys
 import os
 from PIL import Image
-import numpy as np
 import pandas as pd
 import time
+from storage.database.operations import pir_search_true, get_database_stats
+from ui.pages.utils import load_encoder_model, encode_image
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+st.set_page_config(page_title="PIR Търсене", page_icon="🔍", layout="wide")
 
-from database.operations import search_similar, pir_search, get_database_stats
-from ui.utils import load_encoder_model, encode_image
+st.title("🔍 Поверително PIR Търсене")
+st.caption("Заявката се шифрова преди изпращане. Сървърът извършва изчисления над шифъртекст и не знае какво търсите.")
 
-st.set_page_config(page_title="Search Vehicles", page_icon="🔍", layout="wide")
-
-st.title("🔍 Search Similar Vehicles")
-st.markdown("Търсене на подобни превозни средства в базата данни")
-
-st.markdown("---")
-
-# Load model
 @st.cache_resource
 def get_model():
     model_path = "encoder.pth"
     if not os.path.exists(model_path):
-        st.error(f"❌ Encoder модел не е намерен: {model_path}")
+        st.error(f"Моделът не е намерен на адрес: {model_path}")
         return None, None
     try:
         return load_encoder_model(model_path)
     except Exception as e:
-        st.error(f"❌ Грешка: {e}")
+        st.error(f"Грешка при зареждане на модела: {e}")
         return None, None
 
 model, device = get_model()
-
 if model is None:
     st.stop()
 
-# Check database
 stats = get_database_stats()
-
-if stats['total_vehicles'] == 0:
-    st.warning("⚠️ Базата данни е празна! Качете превозни средства първо.")
+if stats["total_vehicles"] == 0:
+    st.warning("Базата данни е празна. Моля, първо качете автомобили.")
     st.stop()
 
-st.success(f"✅ Encoder зареден | База данни: {stats['total_vehicles']} превозни средства")
-
-# Search mode selection
-st.markdown("### 🔐 Search Mode")
-
-mode = st.radio(
-    "Избери режим на търсене:",
-    ["Plain Search", "PIR Search (Private)"],
-    help="Plain = бързо но не е private, PIR = бавно но напълно private"
-)
-
-is_pir = mode == "PIR Search (Private)"
-
-col_info1, col_info2 = st.columns(2)
-
-with col_info1:
-    if is_pir:
-        st.info("""
-        🔐 **PIR Mode**
-        - Query се криптира преди изпращане
-        - Сървърът НЕ вижда query-то
-        - Homomorphic операции
-        - ~50x по-бавно (~500ms)
-        """)
-        
-        if stats['encrypted_count'] == 0:
-            st.error("❌ Няма криптирани записи в базата! PIR търсенето няма да работи.")
-            st.info("💡 Качете превозни средства в Encrypted Mode първо.")
-    else:
-        st.warning("""
-        🔓 **Plain Mode**
-        - Много бързо (~10ms)
-        - Сървърът вижда query-то
-        - Не е private
-        """)
-        
-        if stats['plain_count'] == 0:
-            st.error("❌ Няма plain записи в базата!")
-            st.info("💡 Качете превозни средства в Plain Mode първо.")
-
-with col_info2:
-    st.metric("Available Records", stats['encrypted_count'] if is_pir else stats['plain_count'])
-
-st.markdown("---")
-
-# Search interface
-col1, col2 = st.columns([1, 2])
+col1, col2 = st.columns([1, 2], gap="large")
 
 with col1:
-    st.markdown("### 🖼️ Query Image")
-    
-    query_image = st.file_uploader(
-        "Качи query снимка",
-        type=["jpg", "jpeg", "png"],
-        key="query_upload"
-    )
-    
-    if query_image:
-        image = Image.open(query_image).convert("RGB")
-        st.image(image, caption="Query Image", use_column_width=True)
-    
-    st.markdown("---")
-    st.markdown("### ⚙️ Search Parameters")
-    
-    top_k = st.slider("Брой резултати", 1, 50, 10, help="Колко най-подобни резултата да покаже")
-    
-    st.markdown("**Filters:**")
-    filter_color = st.selectbox(
-        "Цвят",
-        ["All", "red", "blue", "green", "black", "white", "silver", "gray", "yellow"],
-        help="Филтрирай по цвят"
-    )
-    
-    filter_body = st.selectbox(
-        "Тип каросерия",
-        ["All", "sedan", "suv", "truck", "van", "coupe", "hatchback", "wagon"],
-        help="Филтрирай по тип"
-    )
-    
-    # Search button
-    search_button = st.button(
-        "🔍 Search" if not is_pir else "🔐 PIR Search",
-        type="primary",
-        disabled=query_image is None,
-        use_container_width=True
-    )
+    with st.container(border=True):
+        st.markdown("### 🕵️‍♂️ Входна заявка")
+        query_file = st.file_uploader("Качете изображение за търсене", type=["jpg", "jpeg", "png"])
+        if query_file:
+            image = Image.open(query_file).convert("RGB")
+            st.image(image, caption="Заявка", use_container_width=True)
+
+    with st.container(border=True):
+        st.markdown("### ⚙️ Параметри")
+        top_k = st.slider("Брой резултати за връщане", 1, 50, 10)
+        
+        st.markdown("**Филтри след декриптиране** *(прилагат се локално)*")
+        filter_color = st.selectbox("Цвят", ["Всички", "червен", "син", "зелен", "черен", "бял", "сребрист", "сив", "жълт", "друг"])
+        filter_body = st.selectbox("Тип купе", ["Всички", "седан", "SUV / Джип", "камион", "ван", "купе", "хечбек", "комби", "друг"])
+
+        search_button = st.button("🔐 Стартирай PIR Търсене", type="primary", disabled=query_file is None, use_container_width=True)
 
 with col2:
-    st.markdown("### 📊 Search Results")
+    st.markdown("### 📊 Резултати от търсенето")
     
-    if search_button and query_image:
-        # Generate embedding
-        with st.spinner("📊 Генериране на query embedding..."):
-            start_embed_time = time.time()
+    if search_button and query_file:
+        with st.spinner("Генериране на векторен отпечатък и шифроване..."):
+            t0 = time.time()
             embedding = encode_image(image, model, device)
-            embed_time = time.time() - start_embed_time
-        
-        st.success(f"✓ Query embedding генериран ({embed_time:.3f}s)")
-        
-        # Search
-        try:
-            if is_pir:
-                # PIR Search
-                st.markdown("---")
-                st.markdown("#### 🔐 PIR Search Process")
+            embed_time = time.time() - t0
+
+        fetch_k = top_k * 5 if (filter_color != "Всички" or filter_body != "Всички") else top_k
+
+        with st.spinner("Извършване на хомоморфно сканиране на сървъра..."):
+            t0 = time.time()
+            results = pir_search_true(embedding, top_k=fetch_k, verbose=False)
+            search_time = time.time() - t0
+
+        if filter_color != "Всички":
+            results = [r for r in results if r["vehicle"].get("color") == filter_color]
+        if filter_body != "Всички":
+            results = [r for r in results if r["vehicle"].get("body_type") == filter_body]
+        results = results[:top_k]
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Векторизация", f"{embed_time:.3f} с")
+        m2.metric("PIR Сканиране", f"{search_time:.3f} с")
+        m3.metric("Намерени", len(results))
+
+        if not results:
+            st.warning("Няма намерени резултати с избраните филтри.")
+        else:
+            for i, r in enumerate(results):
+                v = r["vehicle"]
+                score = r["similarity_score"]
                 
-                # Create placeholder for live updates
-                pir_log = st.empty()
-                
-                with st.spinner("⏳ PIR Search in progress..."):
-                    start_search_time = time.time()
-                    
-                    # Capture console output (simplified - в реалност PIR функцията принтира)
-                    results = pir_search(
-                        query_embedding=embedding,
-                        top_k=top_k,
-                        filter_color=None if filter_color == "All" else filter_color,
-                        filter_body_type=None if filter_body == "All" else filter_body
-                    )
-                    
-                    search_time = time.time() - start_search_time
-                
-                st.success(f"✓ PIR Search завършено ({search_time:.3f}s)")
-                
-                # Performance comparison
-                col_perf1, col_perf2, col_perf3 = st.columns(3)
-                col_perf1.metric("Embedding Time", f"{embed_time:.3f}s")
-                col_perf2.metric("PIR Search Time", f"{search_time:.3f}s")
-                col_perf3.metric("Total Time", f"{embed_time + search_time:.3f}s")
-                
-                st.info("🔐 **Privacy Guarantee:** Сървърът НЕ видя query embedding-a или similarity scores!")
-                
-            else:
-                # Plain Search
-                with st.spinner("🔍 Търсене..."):
-                    start_search_time = time.time()
-                    
-                    results = search_similar(
-                        query_embedding=embedding,
-                        top_k=top_k,
-                        filter_color=None if filter_color == "All" else filter_color,
-                        filter_body_type=None if filter_body == "All" else filter_body
-                    )
-                    
-                    search_time = time.time() - start_search_time
-                
-                st.success(f"✓ Search завършено ({search_time:.3f}s)")
-                
-                # Performance
-                col_perf1, col_perf2 = st.columns(2)
-                col_perf1.metric("Search Time", f"{search_time*1000:.1f}ms")
-                col_perf2.metric("Results Found", len(results))
+                with st.expandable_container(f"#{i+1} [{v.get('license_plate') or 'БЕЗ НОМЕР'}] — Сходство: {score:.4f}", expanded=i < 2):
+                    col_l, col_r = st.columns([1, 2])
+                    with col_l:
+                        st.metric("Точно съвпадение", f"{score:.5f}")
+                    with col_r:
+                        st.markdown(f"**Рег. номер:** `{v.get('license_plate') or 'N/A'}`")
+                        st.markdown(f"**Цвят:** {v.get('color') or 'N/A'} | **Купе:** {v.get('body_type') or 'N/A'}")
+                        st.caption(f"UUID: {v.get('uuid')}")
+
+            df = pd.DataFrame([{
+                "Ранг": i + 1,
+                "Рег. номер": r["vehicle"].get("license_plate"),
+                "Цвят": r["vehicle"].get("color"),
+                "Купе": r["vehicle"].get("body_type"),
+                "Сходство": f"{r['similarity_score']:.6f}"
+            } for i, r in enumerate(results)])
             
-            # Display results
-            if not results:
-                st.warning("Няма намерени резултати с тези филтри.")
-            else:
-                st.markdown("---")
-                st.markdown(f"### 🎯 Top {len(results)} Results")
-                
-                for i, result in enumerate(results):
-                    vehicle = result["vehicle"]
-                    score = result["similarity_score"]
-                    
-                    with st.expander(
-                        f"#{i+1} - {vehicle['license_plate'] or 'N/A'} - Similarity: {score:.4f}",
-                        expanded=i < 3
-                    ):
-                        col_a, col_b = st.columns([1, 2])
-                        
-                        with col_a:
-                            st.metric("Similarity Score", f"{score:.6f}")
-                            st.metric("License Plate", vehicle['license_plate'] or "N/A")
-                            st.metric("🔐 Encrypted", "Yes" if vehicle['is_encrypted'] else "No")
-                        
-                        with col_b:
-                            st.write(f"**Color:** {vehicle['color'] or 'N/A'}")
-                            st.write(f"**Body Type:** {vehicle['body_type'] or 'N/A'}")
-                            st.write(f"**UUID:** `{vehicle['uuid']}`")
-                            st.write(f"**ID:** {vehicle['id']}")
-                            st.caption(f"Created: {vehicle['created_at']}")
-                
-                # Download results
-                st.markdown("---")
-                df = pd.DataFrame([
-                    {
-                        "Rank": i+1,
-                        "UUID": r["vehicle"]["uuid"],
-                        "License Plate": r["vehicle"]["license_plate"],
-                        "Color": r["vehicle"]["color"],
-                        "Body Type": r["vehicle"]["body_type"],
-                        "Similarity": f"{r['similarity_score']:.6f}",
-                        "Encrypted": r["vehicle"]["is_encrypted"]
-                    }
-                    for i, r in enumerate(results)
-                ])
-                
-                st.download_button(
-                    "📥 Download Results (CSV)",
-                    df.to_csv(index=False),
-                    "search_results.csv",
-                    "text/csv",
-                    use_container_width=True
-                )
-        
-        except Exception as e:
-            st.error(f"❌ Грешка при търсене: {e}")
-            st.exception(e)
-    
+            st.download_button("📥 Изтегли резултатите (CSV)", df.to_csv(index=False), "pir_results.csv", "text/csv", use_container_width=True)
     else:
-        st.info("👆 Качете query изображение и натиснете Search")
-
-st.markdown("---")
-
-# Performance Comparison
-st.markdown("### ⚡ Performance Comparison")
-
-col1, col2 = st.columns(2)
-
-with col1:
-    st.markdown("""
-    **🔓 Plain Search:**
-    - Embedding: ~50ms
-    - Search: ~10ms
-    - **Total: ~60ms**
-    - Privacy: ❌ None
-    """)
-
-with col2:
-    st.markdown("""
-    **🔐 PIR Search:**
-    - Embedding: ~50ms
-    - Encryption: ~100ms
-    - Search: ~500ms
-    - **Total: ~650ms**
-    - Privacy: ✅ Full query privacy
-    """)
-
-st.info("💡 **Trade-off:** PIR е ~10x по-бавно, но осигурява пълна query privacy!")
+        st.info("Моля, качете изображение отляво и натиснете бутона за търсене.")
