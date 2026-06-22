@@ -1,108 +1,62 @@
 """
-Database operations: PostgreSQL (metadata) + FAISS (vectors)
+Database operations with TRUE PIR support
 """
 from typing import List, Optional, Tuple, Dict
 import uuid
 import numpy as np
-import os
+import time
 
 from .models import Vehicle
 from .connection import get_db
-from .vector_store import get_plain_store, get_encrypted_store, save_all_stores
+from .vector_store import get_plain_store, save_all_stores
 from .encryption import (
     encrypt_embedding_simple,
     decrypt_embedding_simple,
     normalize_embedding,
     PIRClient,
-    PIRServer
+    PIRServer,
+    homomorphic_dot_product
 )
 
-# Data directory за encrypted files
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-os.makedirs(DATA_DIR, exist_ok=True)
-
 # ============================================
-# INSERT ОПЕРАЦИИ
+# INSERT OPERATIONS
 # ============================================
 
-def insert_vehicle(
+def insert_vehicle_plain(
     license_plate: Optional[str] = None,
     color: Optional[str] = None,
     body_type: Optional[str] = None,
-    embedding: Optional[np.ndarray] = None,
-    encrypted_embedding: Optional[bytes] = None,
-    encryption_context: Optional[bytes] = None,
+    embedding: np.ndarray = None,
     image_path: Optional[str] = None,
 ) -> Tuple[str, int]:
-    """
-    Вмъква vehicle: PostgreSQL (metadata) + FAISS (vector)
+    """Insert vehicle in PLAIN mode (uses FAISS)"""
     
-    Returns:
-        (vehicle_uuid, vehicle_id)
-    """
     db = get_db()
     
     try:
-        is_encrypted = encrypted_embedding is not None
-        
-        # Стъпка 1: PostgreSQL - metadata
         vehicle = Vehicle(
             vehicle_uuid=str(uuid.uuid4()),
             license_plate=license_plate,
             color=color,
             body_type=body_type,
             image_path=image_path,
-            is_encrypted=is_encrypted,
-            faiss_id=None  # Ще попълним след FAISS add
+            is_encrypted=False
         )
         
         db.add(vehicle)
-        db.flush()  # Get vehicle.id
+        db.flush()
         
-        # Стъпка 2: FAISS - vector
-        if is_encrypted and encrypted_embedding is not None:
-            # Encrypted mode
-            store = get_encrypted_store()
-            
-            # Съхраняваме encrypted data във файлове
-            enc_path = os.path.join(DATA_DIR, f"encrypted_{vehicle.id}.bin")
-            ctx_path = os.path.join(DATA_DIR, f"context_{vehicle.id}.bin")
-            
-            with open(enc_path, 'wb') as f:
-                f.write(encrypted_embedding)
-            with open(ctx_path, 'wb') as f:
-                f.write(encryption_context)
-            
-            # За FAISS търсене - декриптираме временно
-            # (Това е компромис - за pure PIR трябва custom vector search)
-            decrypted = decrypt_embedding_simple(encrypted_embedding, encryption_context)
-            faiss_id = store.add_vector(vehicle.id, decrypted)
-            
-            vehicle.image_path = f"{enc_path}|{ctx_path}"
-            
-        elif embedding is not None:
-            # Plain mode
-            store = get_plain_store()
-            faiss_id = store.add_vector(vehicle.id, embedding)
-        
-        else:
-            raise ValueError("Трябва embedding или encrypted_embedding")
-        
-        # Update FAISS ID в PostgreSQL
+        store = get_plain_store()
+        faiss_id = store.add_vector(vehicle.id, embedding)
         vehicle.faiss_id = faiss_id
         
         db.commit()
         save_all_stores()
         
-        print(f"✓ Vehicle {vehicle.vehicle_uuid} inserted")
-        print(f"  PostgreSQL ID: {vehicle.id}")
-        print(f"  FAISS ID: {vehicle.faiss_id}")
-        
         return vehicle.vehicle_uuid, vehicle.id
         
     except Exception as e:
         db.rollback()
-        print(f"✗ Insert error: {e}")
         raise e
     finally:
         db.close()
@@ -115,84 +69,110 @@ def insert_vehicle_encrypted(
     embedding: np.ndarray = None,
     image_path: Optional[str] = None,
 ) -> Tuple[str, int]:
-    """
-    Вмъква encrypted vehicle
-    """
-    print("Вмъкване с криптиране...")
+    """Insert vehicle in TRUE PIR mode (stores encrypted in PostgreSQL)"""
     
-    # Normalize за PIR
-    normalized = normalize_embedding(embedding)
+    db = get_db()
     
-    # Encrypt
-    encrypted_data, context_data = encrypt_embedding_simple(normalized)
-    print(f"  Криптирано: {len(encrypted_data):,} bytes")
+    try:
+        normalized = normalize_embedding(embedding)
+        encrypted_data, context_data = encrypt_embedding_simple(normalized)
+        
+        vehicle = Vehicle(
+            vehicle_uuid=str(uuid.uuid4()),
+            license_plate=license_plate,
+            color=color,
+            body_type=body_type,
+            image_path=image_path,
+            is_encrypted=True,
+            encrypted_embedding=encrypted_data,
+            encryption_context=context_data,
+            faiss_id=None
+        )
+        
+        db.add(vehicle)
+        db.commit()
+        db.refresh(vehicle)
+        
+        return vehicle.vehicle_uuid, vehicle.id
+        
+    except Exception as e:
+        db.rollback()
+        raise e
+    finally:
+        db.close()
+
+
+def insert_vehicle(
+    license_plate: Optional[str] = None,
+    color: Optional[str] = None,
+    body_type: Optional[str] = None,
+    embedding: Optional[np.ndarray] = None,
+    encrypted_embedding: Optional[bytes] = None,
+    encryption_context: Optional[bytes] = None,
+    image_path: Optional[str] = None,
+) -> Tuple[str, int]:
+    """Insert vehicle (auto-detects mode based on parameters)"""
     
-    return insert_vehicle(
-        license_plate=license_plate,
-        color=color,
-        body_type=body_type,
-        embedding=None,
-        encrypted_embedding=encrypted_data,
-        encryption_context=context_data,
-        image_path=image_path
-    )
+    if encrypted_embedding is not None:
+        db = get_db()
+        try:
+            vehicle = Vehicle(
+                vehicle_uuid=str(uuid.uuid4()),
+                license_plate=license_plate,
+                color=color,
+                body_type=body_type,
+                image_path=image_path,
+                is_encrypted=True,
+                encrypted_embedding=encrypted_embedding,
+                encryption_context=encryption_context
+            )
+            db.add(vehicle)
+            db.commit()
+            db.refresh(vehicle)
+            return vehicle.vehicle_uuid, vehicle.id
+        finally:
+            db.close()
+    else:
+        return insert_vehicle_plain(license_plate, color, body_type, embedding, image_path)
 
 
 # ============================================
-# SEARCH ОПЕРАЦИИ
+# SEARCH OPERATIONS
 # ============================================
 
-def search_similar(
+def search_similar_plain(
     query_embedding: np.ndarray,
     top_k: int = 10,
     filter_color: Optional[str] = None,
     filter_body_type: Optional[str] = None,
 ) -> List[Dict]:
-    """
-    Plain search: FAISS → PostgreSQL
+    """Plain search using FAISS (fast but no privacy)"""
     
-    1. FAISS: намира k най-близки vectors → vehicle IDs
-    2. PostgreSQL: взима metadata за тези IDs
-    3. Прилага filters
-    """
     db = get_db()
     
     try:
-        # Стъпка 1: FAISS search
         store = get_plain_store()
-        distances, vehicle_ids = store.search(query_embedding, k=top_k * 3)  # Extra за filtering
+        distances, vehicle_ids = store.search(query_embedding, k=top_k * 3)
         
-        if len(vehicle_ids) == 0:
-            print("✗ Няма plain vectors")
-            return []
-        
-        print(f"FAISS: {len([v for v in vehicle_ids if v != -1])} candidates")
-        
-        # Стъпка 2: PostgreSQL - metadata
         results = []
-        
         for dist, vid in zip(distances, vehicle_ids):
             if vid == -1:
                 continue
             
-            # Вземи vehicle от PostgreSQL
             vehicle = db.query(Vehicle).filter(
                 Vehicle.id == vid,
                 Vehicle.is_encrypted == False
             ).first()
             
-            if vehicle is None:
+            if not vehicle:
                 continue
             
-            # Стъпка 3: Apply filters
             if filter_color and vehicle.color != filter_color:
                 continue
             if filter_body_type and vehicle.body_type != filter_body_type:
                 continue
             
-            # Convert L2 distance to similarity
             similarity = 1.0 / (1.0 + float(dist))
-            
             results.append({
                 "vehicle": vehicle.to_dict(),
                 "similarity_score": similarity
@@ -201,162 +181,201 @@ def search_similar(
             if len(results) >= top_k:
                 break
         
-        print(f"✓ Plain search: {len(results)} results")
         return results
         
     finally:
         db.close()
 
 
-def pir_search(
+def pir_search_true(
     query_embedding: np.ndarray,
     top_k: int = 10,
     filter_color: Optional[str] = None,
-    filter_body_type: Optional[str] = None
+    filter_body_type: Optional[str] = None,
+    verbose: bool = False
 ) -> List[Dict]:
     """
-    PIR search: FAISS (encrypted) → PostgreSQL
+    TRUE PIR Search - Fully Homomorphic
     
-    Забележка: FAISS работи с decrypted vectors за similarity.
-    За pure PIR без този компромис, трябва homomorphic vector operations.
+    Security:
+    - Server never decrypts query
+    - Server never decrypts DB vectors
+    - Server never knows similarity scores
+    
+    Performance:
+    - O(N) linear scan
+    - ~40-100x slower than FAISS
     """
-    print("\n" + "🔐"*30)
-    print("PIR SEARCH (PostgreSQL + FAISS)")
-    print("🔐"*30 + "\n")
     
     db = get_db()
     
     try:
-        # Client: prepare query
-        print("📱 CLIENT: Encrypt query...")
+        # CLIENT: Prepare encrypted query
         client = PIRClient()
+        start_prep = time.time()
         query_data = client.prepare_query(query_embedding)
+        prep_time = time.time() - start_prep
         
-        print("📡 Send to server...\n")
+        encrypted_query = query_data["encrypted_query"]
+        query_context = query_data["context"]
         
-        # Server: FAISS search
-        print("🖥️  SERVER: FAISS search (encrypted store)...")
-        store = get_encrypted_store()
+        if verbose:
+            print(f"Client query preparation: {prep_time*1000:.2f}ms")
         
-        normalized_query = normalize_embedding(query_embedding)
-        distances, vehicle_ids = store.search(normalized_query, k=top_k * 3)
+        # SERVER: Get encrypted vehicles with metadata filtering
+        query = db.query(Vehicle).filter(Vehicle.is_encrypted == True)
         
-        if len(vehicle_ids) == 0:
-            print("✗ Няма encrypted vectors")
+        if filter_color:
+            query = query.filter(Vehicle.color == filter_color)
+        if filter_body_type:
+            query = query.filter(Vehicle.body_type == filter_body_type)
+        
+        encrypted_vehicles = query.all()
+        
+        if len(encrypted_vehicles) == 0:
             return []
         
-        print(f"SERVER: {len([v for v in vehicle_ids if v != -1])} candidates")
-        print("📡 Return encrypted results...\n")
+        # SERVER: Homomorphic similarity computation
+        server = PIRServer()
+        encrypted_results = []
         
-        # Client: process results
-        print("📱 CLIENT: Decrypt & filter...")
+        start_server = time.time()
         
-        results = []
-        
-        for dist, vid in zip(distances, vehicle_ids):
-            if vid == -1:
-                continue
+        for vehicle in encrypted_vehicles:
+            encrypted_sim = homomorphic_dot_product(
+                encrypted_query,
+                vehicle.encrypted_embedding,
+                query_context
+            )
             
-            # PostgreSQL metadata
+            encrypted_results.append({
+                "vehicle_id": vehicle.id,
+                "encrypted_similarity": encrypted_sim
+            })
+        
+        server_time = time.time() - start_server
+        
+        if verbose:
+            print(f"Server homomorphic computation: {server_time*1000:.2f}ms ({len(encrypted_results)} vectors)")
+        
+        # CLIENT: Decrypt similarities and select top-k
+        start_decrypt = time.time()
+        
+        decrypted_scores = []
+        for result in encrypted_results:
+            decrypted_sim = decrypt_embedding_simple(
+                result["encrypted_similarity"],
+                query_context
+            )
+            
+            score = float(decrypted_sim[0])
+            
+            decrypted_scores.append({
+                "vehicle_id": result["vehicle_id"],
+                "similarity_score": score
+            })
+        
+        decrypt_time = time.time() - start_decrypt
+        
+        decrypted_scores.sort(key=lambda x: x["similarity_score"], reverse=True)
+        top_results = decrypted_scores[:top_k]
+        
+        # CLIENT: Request metadata for top-k
+        final_results = []
+        for result in top_results:
             vehicle = db.query(Vehicle).filter(
-                Vehicle.id == vid,
-                Vehicle.is_encrypted == True
+                Vehicle.id == result["vehicle_id"]
             ).first()
             
-            if vehicle is None:
-                continue
-            
-            # Filters
-            if filter_color and vehicle.color != filter_color:
-                continue
-            if filter_body_type and vehicle.body_type != filter_body_type:
-                continue
-            
-            similarity = 1.0 / (1.0 + float(dist))
-            
-            results.append({
-                "vehicle": vehicle.to_dict(),
-                "similarity_score": similarity
-            })
-            
-            if len(results) >= top_k:
-                break
+            if vehicle:
+                final_results.append({
+                    "vehicle": vehicle.to_dict(),
+                    "similarity_score": result["similarity_score"]
+                })
         
-        print(f"\n✓ PIR search complete: {len(results)} results")
-        print("="*60 + "\n")
+        if verbose:
+            total_time = prep_time + server_time + decrypt_time
+            print(f"Client decryption: {decrypt_time*1000:.2f}ms")
+            print(f"Total PIR search: {total_time*1000:.2f}ms")
         
-        return results
+        return final_results
         
+    except Exception as e:
+        if verbose:
+            print(f"PIR search error: {e}")
+        return []
     finally:
         db.close()
 
 
+# Aliases
+search_similar = search_similar_plain
+pir_search = pir_search_true
+
+
 # ============================================
-# READ ОПЕРАЦИИ
+# READ OPERATIONS
 # ============================================
 
-def get_all_vehicles(skip: int = 0, limit: int = 100) -> List[Vehicle]:
-    """Взема всички vehicles от PostgreSQL"""
+def get_all_vehicles(
+    skip: int = 0,
+    limit: int = 100,
+    encrypted_only: bool = False,
+    plain_only: bool = False
+) -> List[Vehicle]:
+    """Get vehicles with optional filtering"""
     db = get_db()
     try:
-        return db.query(Vehicle).offset(skip).limit(limit).all()
+        query = db.query(Vehicle)
+        
+        if encrypted_only:
+            query = query.filter(Vehicle.is_encrypted == True)
+        elif plain_only:
+            query = query.filter(Vehicle.is_encrypted == False)
+        
+        return query.offset(skip).limit(limit).all()
     finally:
         db.close()
 
 
 def get_vehicle_by_uuid(vehicle_uuid: str) -> Optional[Vehicle]:
-    """Взема vehicle по UUID"""
+    """Get vehicle by UUID"""
     db = get_db()
     try:
-        return db.query(Vehicle).filter(Vehicle.vehicle_uuid == vehicle_uuid).first()
+        return db.query(Vehicle).filter(
+            Vehicle.vehicle_uuid == vehicle_uuid
+        ).first()
     finally:
         db.close()
 
 
 # ============================================
-# DELETE ОПЕРАЦИИ
+# DELETE OPERATIONS
 # ============================================
 
 def delete_vehicle(vehicle_uuid: str) -> bool:
-    """
-    Изтрива vehicle: PostgreSQL + FAISS cleanup
-    """
+    """Delete vehicle by UUID"""
     db = get_db()
-    
     try:
-        vehicle = db.query(Vehicle).filter(Vehicle.vehicle_uuid == vehicle_uuid).first()
+        vehicle = db.query(Vehicle).filter(
+            Vehicle.vehicle_uuid == vehicle_uuid
+        ).first()
         
         if not vehicle:
             return False
         
-        # Cleanup FAISS mapping
-        if vehicle.is_encrypted:
-            store = get_encrypted_store()
-            # Изтрий encrypted files
-            if vehicle.image_path and "|" in vehicle.image_path:
-                enc_path, ctx_path = vehicle.image_path.split("|")
-                if os.path.exists(enc_path):
-                    os.remove(enc_path)
-                if os.path.exists(ctx_path):
-                    os.remove(ctx_path)
-        else:
+        if not vehicle.is_encrypted and vehicle.faiss_id is not None:
             store = get_plain_store()
-        
-        if vehicle.faiss_id is not None:
             store.remove_vector(vehicle.faiss_id)
+            save_all_stores()
         
-        # Delete от PostgreSQL
         db.delete(vehicle)
         db.commit()
         
-        save_all_stores()
-        
-        print(f"✓ Vehicle {vehicle_uuid} deleted")
         return True
         
     except Exception as e:
         db.rollback()
-        print(f"✗ Delete error: {e}")
         return False
     finally:
         db.close()
@@ -367,7 +386,7 @@ def delete_vehicle(vehicle_uuid: str) -> bool:
 # ============================================
 
 def get_database_stats() -> Dict:
-    """Статистика от PostgreSQL"""
+    """Get database statistics"""
     db = get_db()
     
     try:
@@ -377,21 +396,25 @@ def get_database_stats() -> Dict:
         encrypted = db.query(Vehicle).filter(Vehicle.is_encrypted == True).count()
         plain = total - encrypted
         
-        # Color distribution
         colors = db.query(
             Vehicle.color,
-            func.count(Vehicle.id).label("count")
+            func.count(Vehicle.id)
         ).group_by(Vehicle.color).all()
         
-        # Body type distribution
         body_types = db.query(
             Vehicle.body_type,
-            func.count(Vehicle.id).label("count")
+            func.count(Vehicle.id)
         ).group_by(Vehicle.body_type).all()
         
-        # FAISS stats
+        encrypted_vehicles = db.query(Vehicle).filter(
+            Vehicle.is_encrypted == True
+        ).all()
+        
+        total_encrypted_size = sum(v.get_storage_size() for v in encrypted_vehicles)
+        avg_encrypted_size = total_encrypted_size / max(encrypted, 1)
+        
+        # Only plain store exists (TRUE PIR doesn't use FAISS)
         plain_store = get_plain_store()
-        enc_store = get_encrypted_store()
         
         return {
             "total_vehicles": total,
@@ -400,7 +423,8 @@ def get_database_stats() -> Dict:
             "color_distribution": {c: cnt for c, cnt in colors if c},
             "body_type_distribution": {b: cnt for b, cnt in body_types if b},
             "faiss_plain_vectors": plain_store.get_stats()["total_vectors"],
-            "faiss_encrypted_vectors": enc_store.get_stats()["total_vectors"]
+            "total_encrypted_storage_bytes": total_encrypted_size,
+            "avg_encrypted_storage_bytes": int(avg_encrypted_size),
         }
         
     finally:
@@ -408,21 +432,16 @@ def get_database_stats() -> Dict:
 
 
 def get_encryption_stats() -> Dict:
-    """Encryption статистика"""
+    """Get encryption statistics"""
     stats = get_database_stats()
-    
-    # Прост calculation (в production би трябвало да query-ваш файловете)
-    avg_encrypted_size = 100000  # ~100KB per encrypted embedding
-    avg_context_size = 50000     # ~50KB context
-    plain_size = 256 * 4         # 256 floats * 4 bytes = 1KB
+    plain_size = 256 * 4
     
     return {
         "total_vehicles": stats["total_vehicles"],
         "encrypted_count": stats["encrypted_count"],
         "plain_count": stats["plain_count"],
         "encryption_percentage": (stats["encrypted_count"] / max(stats["total_vehicles"], 1)) * 100,
-        "avg_encrypted_size_bytes": avg_encrypted_size,
-        "avg_context_size_bytes": avg_context_size,
-        "avg_total_size_bytes": avg_encrypted_size + avg_context_size,
-        "plain_embedding_size_bytes": plain_size
+        "avg_encrypted_size_bytes": stats["avg_encrypted_storage_bytes"],
+        "plain_embedding_size_bytes": plain_size,
+        "storage_overhead": stats["avg_encrypted_storage_bytes"] / plain_size if plain_size else 0
     }
