@@ -1,48 +1,66 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, LargeBinary, Boolean
-from pgvector.sqlalchemy import Vector
+from sqlalchemy import Column, Integer, String, DateTime, LargeBinary
 from datetime import datetime
 from .connection import Base
 
+
 class Vehicle(Base):
     """
-    SQLAlchemy модел за таблицата vehicles
-    Съхранява метаданните за превозните средства
-    """
-    __tablename__ = "vehicles"
-    
-    # Колони
-    id = Column(Integer, primary_key=True, index=True)
-    vehicle_uuid = Column(String, unique=True, nullable=False)  # Уникален идентификатор
-    license_plate = Column(String, index=True)  # Номер
-    color = Column(String, index=True)          # Цвят
-    body_type = Column(String, index=True)      # Тип каросерия
-    image_path = Column(String)                 # Път до снимка
-    is_encrypted = Column(Boolean, default=False, index=True)  # Дали е криптирано
-    created_at = Column(DateTime, default=datetime.utcnow)     # Кога е създадено
-    updated_at = Column(DateTime, default=datetime.utcnow)     # Последна промяна
-    
-    def __repr__(self):
-        return f"<Vehicle {self.license_plate} ({self.color} {self.body_type})>"
+    Модел за превозно средство в PURE PIR система
 
-class VehicleVector(Base):
+    Архитектура:
+    - Всичко е криптирано (CKKS)
+    - Няма plaintext полета
+    - Серверът не може да види съдържанието
     """
-    SQLAlchemy модел за таблицата vehicle_vectors
-    Съхранява векторните embeddings (обикновени и криптирани)
-    """
-    __tablename__ = "vehicle_vectors"
-    
-    # Колони
-    id = Column(Integer, primary_key=True)
-    vehicle_id = Column(Integer, ForeignKey("vehicles.id"), unique=True)  # Връзка към vehicles таблицата
-    
-    # Обикновен embedding (256 float числа)
-    embedding = Column(Vector(256))  # pgvector тип
-    
-    # Криптиран embedding (binary данни)
-    encrypted_embedding = Column(LargeBinary)
-    encryption_context = Column(LargeBinary)  # CKKS контекст
-    
+
+    __tablename__ = "vehicles"
+
+    # Идентификатори
+    id = Column(Integer, primary_key=True, index=True)
+    vehicle_uuid = Column(String, unique=True, nullable=False)
+
+    # Криптирани данни
+    encrypted_embedding = Column(LargeBinary, nullable=False)
+    encrypted_metadata = Column(LargeBinary, nullable=False)
+
+    # Времеви маркери
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
     def __repr__(self):
-        return f"<VehicleVector vehicle_id={self.vehicle_id}>"
+        """
+        Текстово представяне на обекта (само за debug)
+        """
+        return f"<Vehicle id={self.id} PIR_ENCRYPTED>"
+
+    def to_dict(self):
+        """
+        Конвертира обекта в речник.
+
+        Забележка:
+        Метаданните са криптирани и трябва да се декриптират клиентски.
+        """
+        return {
+            "id": self.id,
+            "uuid": self.vehicle_uuid,
+            "is_encrypted": True,
+            "has_encrypted_data": True,
+            "encrypted_embedding_size": len(self.encrypted_embedding) if self.encrypted_embedding else 0,
+            "encrypted_metadata_size": len(self.encrypted_metadata) if self.encrypted_metadata else 0,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
+
+    def get_storage_size(self) -> int:
+        """
+        Изчислява общия размер на криптираните данни в байтове
+        """
+        size = 0
+
+        if self.encrypted_embedding:
+            size += len(self.encrypted_embedding)
+
+        if self.encrypted_metadata:
+            size += len(self.encrypted_metadata)
+
+        return size
