@@ -1,48 +1,48 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, LargeBinary, Boolean
-from pgvector.sqlalchemy import Vector
+"""
+SQLAlchemy models за PostgreSQL
+"""
+from sqlalchemy import Column, Integer, String, DateTime, Boolean
 from datetime import datetime
 from .connection import Base
 
 class Vehicle(Base):
     """
-    SQLAlchemy модел за таблицата vehicles
-    Съхранява метаданните за превозните средства
+    Метаданни за превозни средства в PostgreSQL
     """
     __tablename__ = "vehicles"
     
     # Колони
     id = Column(Integer, primary_key=True, index=True)
-    vehicle_uuid = Column(String, unique=True, nullable=False)  # Уникален идентификатор
-    license_plate = Column(String, index=True)  # Номер
-    color = Column(String, index=True)          # Цвят
-    body_type = Column(String, index=True)      # Тип каросерия
-    image_path = Column(String)                 # Път до снимка
-    is_encrypted = Column(Boolean, default=False, index=True)  # Дали е криптирано
-    created_at = Column(DateTime, default=datetime.utcnow)     # Кога е създадено
-    updated_at = Column(DateTime, default=datetime.utcnow)     # Последна промяна
+    vehicle_uuid = Column(String, unique=True, nullable=False)
     
-    def __repr__(self):
-        return f"<Vehicle {self.license_plate} ({self.color} {self.body_type})>"
-
-class VehicleVector(Base):
-    """
-    SQLAlchemy модел за таблицата vehicle_vectors
-    Съхранява векторните embeddings (обикновени и криптирани)
-    """
-    __tablename__ = "vehicle_vectors"
+    # Метаданни
+    license_plate = Column(String, index=True)
+    color = Column(String, index=True)
+    body_type = Column(String, index=True)
+    image_path = Column(String)
     
-    # Колони
-    id = Column(Integer, primary_key=True)
-    vehicle_id = Column(Integer, ForeignKey("vehicles.id"), unique=True)  # Връзка към vehicles таблицата
+    # Encryption & FAISS
+    is_encrypted = Column(Boolean, default=False, index=True)
+    faiss_id = Column(Integer, index=True)  # ID в FAISS index
     
-    # Обикновен embedding (256 float числа)
-    embedding = Column(Vector(256))  # pgvector тип
-    
-    # Криптиран embedding (binary данни)
-    encrypted_embedding = Column(LargeBinary)
-    encryption_context = Column(LargeBinary)  # CKKS контекст
-    
+    # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow)
     
     def __repr__(self):
-        return f"<VehicleVector vehicle_id={self.vehicle_id}>"
+        return f"<Vehicle {self.license_plate} (FAISS:{self.faiss_id})>"
+    
+    def to_dict(self):
+        """Конвертира в dictionary"""
+        return {
+            "id": self.id,
+            "uuid": self.vehicle_uuid,
+            "license_plate": self.license_plate,
+            "color": self.color,
+            "body_type": self.body_type,
+            "image_path": self.image_path,
+            "is_encrypted": self.is_encrypted,
+            "faiss_id": self.faiss_id,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at
+        }
