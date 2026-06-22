@@ -1,74 +1,159 @@
-# CKKS Encryption + Private Information Retrieval (Legitimate Part)
+# Private Information Retrieval with CKKS Encryption
 
-## Overview
 
-This project implements a secure machine learning inference system using **CKKS (Cheon-Kim-Kim-Song) encryption** for **Private Information Retrieval (PIR)**. The system allows clients to query a server for encrypted model predictions without revealing their data or the model parameters.
+Система за поверително търсене на превозни средства чрез **CKKS хомоморфно криптиране**.
 
-## Key Components
+---
 
-### 1. CKKS Encryption
-- **Homomorphic Encryption**: Enables computations on encrypted data
-- **Approximate Arithmetic**: Supports all floating-point operations for ML applications
-- **Batching**: Processes multiple plaintext values in a single ciphertext
+## Съдържание
 
-### 2. Private Information Retrieval (PIR)
-- **Database Encryption**: Stores user data in encrypted form
-- **Query Processing**: Client retrieves specific data without revealing queries
-- **Security**: Prevents information leakage about client data
+- [Обзор](#обзор)
+- [Как работи](#как-работи)
+  - [Основна гаранция](#основна-гаранция)
+  - [Insert (вмъкване)](#insert-вмъкване)
+  - [Search (PIR търсене)](#search-pir-търсене)
+  - [Декриптиране на метаданни](#декриптиране-на-метаданни)
+- [Архитектура](#архитектура)
+- [Производителност](#производителност)
+- [Сигурност](#сигурност)
+- [Зависимости](#зависимости)
+- [Стартиране](#стартиране)
+- [Ограничения](#ограничения)
 
-## Architecture
+---
 
+## Обзор
+
+Системата реализира privacy-preserving similarity search, при която:
+
+- Сървърът не вижда embeddings
+- Сървърът не вижда метаданни
+- Сървърът не вижда заявката
+- Всички операции се извършват чрез CKKS хомоморфно криптиране
+
+---
+
+## Как работи
+
+### Основна гаранция
+
+В базата се съхраняват само криптирани данни:
+
+- encrypted_embedding
+- encrypted_metadata
+
+Сървърът няма способност да декриптира тези стойности.
+
+---
+
+### Insert (вмъкване)
+
+При insert_vehicle:
+
+1. Embedding се нормализира (L2 нормализация)
+2. Embedding и metadata се криптират с CKKS
+3. В PostgreSQL се записват само ciphertext стойности
+
+---
+
+### Search (PIR търсене)
+
+Процесът на търсене:
+
+1. Клиентът криптира заявката
+2. Сървърът изчислява:
+enc_query · enc_embedding
+за всички записи (O(N))
+3. Сървърът връща всички криптирани резултати
+4. Клиентът декриптира резултатите локално
+5. Клиентът избира Top-K
+6. Клиентът декриптира метаданни само за Top-K
+
+---
+
+### Декриптиране на метаданни
+
+Метаданните се съхраняват като CKKS криптирани UTF-8 байтове:
+byte_values / 255.0 → CKKS encrypt
+CKKS decrypt → *255 → clamp → round → JSON
+
+---
+
+## Архитектура
+
+```text
+- README.md - Основен README на проекта 
+- presentation/
+  - index.html - Презентация (HTML слайдове)
+- ui/
+  - app.py - Входна точка на Streamlit приложението (импортира `storage.database.operations`)
+  - pages/
+    - 1_upload.py - Страница за качване (Streamlit многостранично; обработка на качени файлове)
+    - 2_search.py - Страница за търсене
+    - 3_browse.py - Преглед / администриране (списък с автомобили, изтриване, статистики)
+    - utils.py - Помощни UI функции (напр. `Letterbox` трансформация за изображения)
+- storage/
+  - README.md - кратко описание на хранилището за криптирани данни
+  - database/
+    - __init__.py - Инициализация на пакета за модулите на базата данни
+    - connection.py - Конфигурация на SQLAlchemy / PostgreSQL (engine, session, помощни функции)
+    - models.py - SQLAlchemy модели (напр. `Vehicle` с криптирани полета)
+
+Забележка:
+- За да заредите Streamlit трябва да го изпълните от root-a или да го добавите: PYTHONPATH / sys.path в `ui/app.py`.
 ```
-Client → Encrypted Query → Server
-    ↓                       ↓
-Encrypted Data        Encrypted Model
-    ↓                       ↓
- PIR System           CKKS Encryption
-    ↓                       ↓
- Decrypted             Decrypted
-   Output                Output
+
+CKKS контекстът се съхранява в отделен файл и се зарежда при стартиране.
+
+---
+
+## Производителност
+
+| Операция | Време |
+|----------|------|
+| Криптиране на заявка | ~10 ms |
+| Homomorphic scan | ~500–900 ms |
+| Декриптиране на клиент | ~200 ms |
+| Общо търсене | ~700–1200 ms |
+
+Системата е O(N) линейна по брой записи.
+
+---
+
+## Сигурност
+
+| Свойство | Статус |
+|----------|--------|
+| Достъп до embeddings от сървъра | Не |
+| Достъп до метаданни | Не |
+| Достъп до заявка | Не |
+| Разкриване на резултати на сървъра | Не |
+| Access pattern leakage | Минимален |
+| Модел | Computational PIR (CKKS / RLWE) |
+
+---
+
+## Зависимости
+
+- TenSEAL (CKKS хомоморфно криптиране)
+- NumPy
+- SQLAlchemy
+- PostgreSQL
+
+---
+
+## Стартиране
+
+```bash
+>> $env:PYTHONPATH = "$PWD"
+>> python -m streamlit run ui/app.py
 ```
 
-## Features
+---
 
-- ✅ **Secure Inference**: No plaintext data exposure
-- ✅ **Homomorphic Operations**: Linear algebra on encrypted tensors
-- ✅ **PIR Integration**: Private database access
-- ✅ **PyTorch Compatibility**: Works with standard PyTorch models
-- ✅ **Batch Processing**: Efficient handling of multiple queries
+## Ограничения
 
-## Getting Started
-
-### Prerequisites
-- Python 3.8+
-- PyTorch
-- Microsoft SEAL (for CKKS implementation)
-- PIR libraries
-
-### Installation
-
-### Usage
-
-## Security Benefits
-
-1. **Data Privacy**: Client data never leaves encrypted form
-2. **Model Protection**: Server cannot access plaintext data
-3. **Query Privacy**: PIR ensures client queries remain hidden
-4. **Computation Security**: All operations performed on encrypted data
-
-## Applications
-
-- **Healthcare AI**: Medical diagnosis without exposing patient data
-- **Financial Services**: Fraud detection with customer privacy
-- **Cloud ML**: Secure model inference on third-party servers
-- **IoT Analytics**: Edge computing with encrypted sensor data
-
-## References
-
-- [CKKS Scheme](https://eprint.iacr.org/2016/421)
-- [Private Information Retrieval](https://en.wikipedia.org/wiki/Private_information_retrieval)
-- [Microsoft SEAL](https://github.com/microsoft/SEAL)
-
-
-- [Dataset](https://drive.google.com/file/d/1KxifqA8urDRauS30LWXiBam_wW5Yp1fO/view?usp=sharing)
-
+- Линеен scan върху всички записи (O(N))
+- Големи ciphertext-и (~600KB на запис)
+- Зависимост от CKKS context файл
+- Ограничение на metadata (~256 bytes преди криптиране)
