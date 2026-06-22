@@ -1,44 +1,37 @@
-"""
-PostgreSQL database connection
-"""
-from sqlalchemy import create_engine, text  # ← Добави text import
-from sqlalchemy.orm import sessionmaker, declarative_base
 import os
+from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker, declarative_base
 
-# Database URL
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:postgres123@localhost:5432/vehicle_storage"
+load_dotenv()
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL липсва в .env")
+
+engine = create_engine(DATABASE_URL, echo=False)
+
+SessionLocal = sessionmaker(
+    bind=engine,
+    autoflush=False,
+    autocommit=False
 )
 
-print(f"🔗 Connecting to: {DATABASE_URL.split('@')[1]}")
-
-# Create engine
-engine = create_engine(DATABASE_URL, echo=False)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
 
 def get_db():
-    """
-    Връща database session
-    """
-    db = SessionLocal()
-    try:
-        return db
-    except:
-        db.close()
-        raise
+    """Създава и връща DB session"""
+    return SessionLocal()
 
 def test_connection():
-    """
-    Тества връзката
-    """
+    """Тества връзката към PostgreSQL"""
+    db = get_db()
     try:
-        db = get_db()
-        db.execute(text("SELECT 1"))  # ← Fix: wrap with text()
-        db.close()
-        print("✓ PostgreSQL connection успешна")
+        db.execute(text("SELECT 1"))
+        print("Успешно свързване")
         return True
     except Exception as e:
-        print(f"✗ PostgreSQL connection неуспешна: {e}")
+        print(f"Неуспешна връзка: {e}")
         return False
+    finally:
+        db.close()
