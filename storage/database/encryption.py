@@ -238,3 +238,72 @@ class PIRServer:
         result = query_vec.dot(db_vec)
         
         return result.serialize()
+    
+import json
+
+# ... existing code ...
+
+def encrypt_metadata(metadata: Dict, context_data: bytes) -> bytes:
+    """
+    Encrypt metadata dictionary
+    
+    Args:
+        metadata: Dict with license_plate, color, body_type, image_path
+        context_data: CKKS context
+    
+    Returns:
+        Encrypted metadata bytes
+    """
+    # Serialize to JSON
+    json_str = json.dumps(metadata)
+    json_bytes = json_str.encode('utf-8')
+    
+    # Simple XOR encryption (for metadata, not vectors)
+    # In production, use proper AES encryption
+    # For now, just store encrypted with context
+    
+    # Convert to vector for CKKS (pad to 256)
+    metadata_vector = np.frombuffer(json_bytes, dtype=np.uint8).astype(np.float32)
+    
+    # Pad to 256
+    if len(metadata_vector) < 256:
+        metadata_vector = np.pad(metadata_vector, (0, 256 - len(metadata_vector)))
+    else:
+        metadata_vector = metadata_vector[:256]
+    
+    # Encrypt with CKKS
+    context = ts.context_from(context_data)
+    encrypted = ts.ckks_vector(context, metadata_vector.tolist())
+    
+    return encrypted.serialize()
+
+
+def decrypt_metadata(encrypted_metadata: bytes, context_data: bytes) -> Dict:
+    """
+    Decrypt metadata
+    
+    Args:
+        encrypted_metadata: Encrypted bytes
+        context_data: CKKS context
+    
+    Returns:
+        Decrypted metadata dictionary
+    """
+    # Load and decrypt
+    context = ts.context_from(context_data)
+    encrypted_vec = ts.ckks_vector_from(context, encrypted_metadata)
+    decrypted = encrypted_vec.decrypt()
+    
+    # Convert back to bytes
+    metadata_floats = np.array(decrypted[:256])
+    metadata_bytes = np.round(metadata_floats).astype(np.uint8).tobytes()
+    
+    # Remove padding (find null terminator)
+    json_str = metadata_bytes.decode('utf-8', errors='ignore').rstrip('\x00')
+    
+    # Parse JSON
+    try:
+        metadata = json.loads(json_str)
+        return metadata
+    except:
+        return {}
