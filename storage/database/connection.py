@@ -1,4 +1,7 @@
-from sqlalchemy import create_engine
+"""
+PostgreSQL database connection
+"""
+from sqlalchemy import create_engine, text  # ← Добави text import
 from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 
@@ -8,7 +11,7 @@ DATABASE_URL = os.getenv(
     "postgresql://postgres:postgres123@localhost:5432/vehicle_storage"
 )
 
-print(f"🔗 Connecting to: {DATABASE_URL.split('@')[1]}")  # Скриваме паролата
+print(f"🔗 Connecting to: {DATABASE_URL.split('@')[1]}")
 
 # Create engine
 engine = create_engine(DATABASE_URL, echo=False)
@@ -32,7 +35,7 @@ def test_connection():
     """
     try:
         db = get_db()
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))  # ← Fix: wrap with text()
         db.close()
         print("✓ PostgreSQL connection успешна")
         return True
