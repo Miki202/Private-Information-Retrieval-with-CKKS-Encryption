@@ -11,7 +11,6 @@ Two models are involved:
 The CRNN architecture and alphabet are imported from `car_plate.py`
 (same file used during training).
 """
-from __future__ import annotations
 
 from pathlib import Path
 
@@ -29,9 +28,6 @@ from car_plate import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
 HERE        = Path(__file__).parent.resolve()
 YOLO_PATH   = HERE.parent / "detectors" / "plates" / "car-plate-best.pt"
 CRNN_PATH   = HERE / "crnn_epoch_60.pth"
@@ -42,9 +38,6 @@ PLATE_PAD_RATIO = 0.05                     # mild padding around the bbox
 DEVICE          = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-# ---------------------------------------------------------------------------
-# Preprocessing — must match CRNN training pipeline
-# ---------------------------------------------------------------------------
 plate_preprocess = transforms.Compose([
     transforms.Resize((IMG_SIZE, IMG_SIZE)),
     transforms.ToTensor(),
@@ -52,9 +45,6 @@ plate_preprocess = transforms.Compose([
 ])
 
 
-# ---------------------------------------------------------------------------
-# Model loaders
-# ---------------------------------------------------------------------------
 def load_detector(weights_path: Path = YOLO_PATH) -> YOLO:
     """YOLOv8 fine-tuned for license plate detection."""
     return YOLO(str(weights_path))
