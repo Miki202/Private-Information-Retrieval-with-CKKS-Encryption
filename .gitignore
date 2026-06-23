@@ -1,5 +1,15 @@
 .env
+.env.local
 venv/
 __pycache__/
 .DS_Store
+
+notebooks/dataset/images/
+notebooks/dataset/dataset_split/
+notebooks/dataset/pairs/
+notebooks/dataset/*.zip
+notebooks/dataset/*.csv
+
+notebooks/img2vec/checkpoints/
+*.pth
 
