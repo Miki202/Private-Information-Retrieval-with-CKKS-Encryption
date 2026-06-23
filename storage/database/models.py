@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, LargeBinary
 from datetime import datetime
-from .connection import Base
+from connection import Base
 
 
 class Vehicle(Base):
