@@ -28,9 +28,9 @@ from car_plate import (
 )
 
 
-HERE        = Path(__file__).parent.resolve()
-YOLO_PATH   = HERE.parent / "detectors" / "plates" / "car-plate-best.pt"
-CRNN_PATH   = HERE / "crnn_epoch_60.pth"
+HERE        = Path(__file__).parent.resolve()       # notebooks/
+YOLO_PATH   = HERE / "detectors" / "plates" / "car-plate-best.pt"
+CRNN_PATH   = HERE / "plate" / "crnn_epoch_60.pth"
 
 IMG_SIZE        = 128                      # CRNN was trained on 128x128 RGB
 PLATE_CONF      = 0.30                     # YOLO confidence for plate detection
