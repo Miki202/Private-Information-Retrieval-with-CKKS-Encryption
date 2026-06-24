@@ -1,203 +1,98 @@
 ﻿"""
-Популиране на база данни с пълни профили на автомобили.
-Използва ВСИЧКИ модели: encoding, цвят, табели.
-
-Използване: python scripts/populate_db.py <папка_с_изображения> [лимит]
+Популиране на базата данни директно от готовите analysis файлове.
+Използва вече изчислените embeddings и метаданни.
 """
 import sys
 from pathlib import Path
-from tqdm import tqdm
+import pandas as pd
 import numpy as np
+from tqdm import tqdm
 
 # Добавяне на project root към path
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from PIL import Image
-
-# Import на всички модели
-from notebooks.img2vec_example import encode
-from notebooks.car_color_example import extract_color
-from notebooks.car_plate_example import detect_plates, ocr_plates_batch
-
 from storage.database.operations import insert_vehicle
 
-
-def process_image_full_pipeline(image_path: Path) -> dict:
-    """
-    Пълен 4-етапен pipeline за обработка на автомобилно изображение.
+def populate_from_analysis(csv_path: Path, npy_path: Path, limit: int = None):
+    print(f"Зареждане на метаданни от: {csv_path}")
+    df = pd.read_csv(csv_path)
     
-    Етапи:
-        1. Vehicle encoding (256-D вектор)
-        2. Цвят (HSV класификация)
-        3. Регистрационна табела (YOLO + CRNN OCR)
-        4. Тип на автомобила (TODO)
+    print(f"Зареждане на embeddings от: {npy_path}")
+    embeddings = np.load(npy_path)
     
-    Returns:
-        dict с embedding, license_plate, color, body_type или None при грешка
-    """
-    try:
-        # Зареждане на изображение
-        pil_image = Image.open(image_path).convert('RGB')
+    if len(df) != len(embeddings):
+        print(f"ГРЕШКА: Разминаване! CSV има {len(df)} реда, а NPY има {len(embeddings)} вектора.")
+        sys.exit(1)
         
-        # ============================================================
-        # ЕТАП 1: Vehicle Encoding
-        # ============================================================
-        print(f'  [1/4] Encoding...', end=' ', flush=True)
-        embedding_tensor = encode(pil_image)
-        embedding = embedding_tensor.cpu().numpy()
-        print(f'✓ shape={embedding.shape}')
-        
-        # ============================================================
-        # ЕТАП 2: Извличане на цвят
-        # ============================================================
-        print(f'  [2/4] Цвят...', end=' ', flush=True)
-        try:
-            color_result = extract_color(pil_image)
-            # extract_color връща dict като {"name": "red", "share": 0.43, ...}
-            color_name = color_result.get('name') if isinstance(color_result, dict) else str(color_result)
-            print(f'✓ {color_name}')
-        except Exception as e:
-            color_name = None
-            print(f'✗ ({e})')
-        
-        # ============================================================
-        # ЕТАП 3: Детекция и OCR на табели
-        # ============================================================
-        print(f'  [3/4] Табела...', end=' ', flush=True)
-        try:
-            plate_crops = detect_plates(pil_image)
-            
-            if plate_crops:
-                plate_texts = ocr_plates_batch(plate_crops)
-                license_plate = plate_texts[0] if plate_texts else None
-                print(f'✓ {license_plate}')
-            else:
-                license_plate = None
-                print('⊘ (не е открита)')
-        except Exception as e:
-            license_plate = None
-            print(f'✗ ({e})')
-        
-        # ============================================================
-        # ЕТАП 4: Тип на автомобила (body type)
-        # ============================================================
-        print(f'  [4/4] Тип...', end=' ', flush=True)
-        body_type = None  # TODO: добави vehicle type classifier ако има
-        print('⊘ (не е имплементирано)')
-        
-        # Резултат
-        return {
-            'embedding': embedding,
-            'license_plate': license_plate,
-            'color': color_name,
-            'body_type': body_type,
-            'image_path': str(image_path.resolve())
-        }
-        
-    except Exception as e:
-        print(f'  ✗ Фатална грешка: {e}')
-        import traceback
-        traceback.print_exc()
-        return None
-
-
-def populate_database(image_folder: Path, limit: int = None):
-    """
-    Обработва всички изображения в папка и ги вкарва в базата.
-    
-    Args:
-        image_folder: Папка с изображения на автомобили
-        limit: Максимален брой изображения (None = всички)
-    """
-    
-    # Намиране на всички изображения
-    image_extensions = ['*.jpg', '*.jpeg', '*.png', '*.JPG', '*.JPEG', '*.PNG']
-    image_paths = []
-    for ext in image_extensions:
-        image_paths.extend(image_folder.glob(ext))
-    
     if limit:
-        image_paths = image_paths[:limit]
-    
-    if not image_paths:
-        print(f'⚠️  Не са намерени изображения в {image_folder}')
-        return
-    
-    print(f'Намерени {len(image_paths)} изображения в {image_folder}')
-    print('='*60)
-    
-    success_count = 0
-    fail_count = 0
-    
-    for img_path in image_paths:
-        print(f'\n[{success_count + fail_count + 1}/{len(image_paths)}] {img_path.name}')
+        df = df.head(limit)
         
-        # Обработка с пълен pipeline
-        profile = process_image_full_pipeline(img_path)
-        
-        if profile is None:
-            fail_count += 1
-            continue
-        
-        # Вмъкване в базата данни
+    print(f"Ще бъдат обработени {len(df)} записа.")
+    print("="*60)
+    
+    success = 0
+    failed = 0
+    
+    for idx, row in tqdm(df.iterrows(), total=len(df), desc="Вмъкване в DB"):
         try:
-            print(f'  [DB] Криптиране и вмъкване...', end=' ', flush=True)
+            # 1. Вземане на метаданни
+            # В CSV-то табелите са записани като JSON string: '["AA1234BB"]'
+            import json
+            plates_str = row.get('plates', '[]')
+            try:
+                plates_list = json.loads(plates_str)
+                license_plate = plates_list[0] if plates_list else None
+            except:
+                license_plate = None
+                
+            color = str(row['color_name']) if pd.notna(row.get('color_name')) else None
+            image_path = str(row['path'])
             
+            # 2. Вземане на съответния embedding
+            emb_idx = int(row['embedding_idx'])
+            embedding = embeddings[emb_idx]
+            
+            # Проверка дали embedding-ът не е празен (всички нули)
+            if np.all(embedding == 0):
+                failed += 1
+                continue
+            
+            # 3. Вмъкване в базата данни (Криптирането става вътре)
             uuid, db_id = insert_vehicle(
-                embedding=profile['embedding'],
-                license_plate=profile['license_plate'],
-                color=profile['color'],
-                body_type=profile['body_type'],
-                image_path=profile['image_path']
+                embedding=embedding,
+                license_plate=license_plate,
+                color=color,
+                body_type=None,  # Нямаме body_type в analysis_results
+                image_path=image_path
             )
             
-            print(f'✓ UUID={uuid[:8]}..., ID={db_id}')
-            success_count += 1
+            success += 1
             
         except Exception as e:
-            print(f'✗ Database грешка: {e}')
-            fail_count += 1
-    
-    # Обобщение
-    print(f'\n{'='*60}')
-    print(f'РЕЗУЛТАТИ:')
-    print(f'  ✓ Успешни:    {success_count}')
-    print(f'  ✗ Неуспешни:  {fail_count}')
-    print(f'  📊 Общо:      {len(image_paths)}')
-    
-    if len(image_paths) > 0:
-        success_rate = success_count / len(image_paths) * 100
-        print(f'  💾 Успеваемост: {success_rate:.1f}%')
-    
-    # Финална статистика на базата
-    try:
-        from storage.database.operations import get_database_stats
-        stats = get_database_stats()
-        print(f'\n📦 Общо записи в базата: {stats["total_vehicles"]}')
-    except Exception:
-        pass
+            print(f"\n✗ Грешка при запис {idx}: {e}")
+            failed += 1
 
+    print("\n" + "="*60)
+    print(f"ГОТОВО! Успешни: {success}, Неуспешни: {failed}")
+    print("="*60)
 
-if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print('Използване: python scripts/populate_db.py <папка> [лимит]')
-        print('')
-        print('Примери:')
-        print('  python scripts/populate_db.py test_images/')
-        print('  python scripts/populate_db.py pipe/ 5')
-        print('  python scripts/populate_db.py C:\\Data\\cars\\ 100')
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        print("Използване: python scripts/populate_from_analysis.py <път_до_csv> <път_до_npy> [лимит]")
+        print("Пример: python scripts/populate_from_analysis.py analysis_results.csv analysis_embeddings.npy 100")
         sys.exit(1)
+        
+    csv_file = Path(sys.argv[1])
+    npy_file = Path(sys.argv[2])
+    limit_val = int(sys.argv[3]) if len(sys.argv) > 3 else None
     
-    folder = Path(sys.argv[1])
-    limit = int(sys.argv[2]) if len(sys.argv) > 2 else None
-    
-    if not folder.exists():
-        print(f'✗ Грешка: Папката {folder} не съществува')
+    if not csv_file.exists():
+        print(f"Грешка: CSV файлът {csv_file} не съществува!")
         sys.exit(1)
-    
-    if not folder.is_dir():
-        print(f'✗ Грешка: {folder} не е папка')
+        
+    if not npy_file.exists():
+        print(f"Грешка: NPY файлът {npy_file} не съществува!")
         sys.exit(1)
-    
-    populate_database(folder, limit)
+        
+    populate_from_analysis(csv_file, npy_file, limit_val)

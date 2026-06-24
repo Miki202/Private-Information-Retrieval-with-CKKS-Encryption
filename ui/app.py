@@ -132,11 +132,13 @@ if query_img:
         for i, r in enumerate(results, 1):
             v = r["vehicle"]
             rows.append({
-                "Ранг": i,
-                "Сходство": f"{r['similarity_score'] * 100:.2f}%",
-                "Регистрационен номер": v.get("license_plate"),
-                "Цвят": v.get("color"),
-                "Тип": v.get("body_type"),
+                "ID": v.id,
+                "UUID": str(v.vehicle_uuid)[:13] + "...",
+                "Рег. номер": v.license_plate or "—",
+                "Цвят": v.color or "—",
+                "Тип": v.body_type or "—",
+                "Добавен": v.created_at.strftime("%Y-%m-%d %H:%M") if v.created_at else "—",
+                "_full_uuid": v.vehicle_uuid
             })
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
