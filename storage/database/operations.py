@@ -1,6 +1,3 @@
-"""
-Database operations за TRUE PIR с plaintext за UI
-"""
 from typing import List, Optional, Tuple, Dict
 import uuid
 import numpy as np
@@ -52,10 +49,10 @@ def insert_vehicle(
             vehicle_uuid=str(uuid.uuid4()),
             encrypted_embedding=encrypted_embedding,
             encrypted_metadata=encrypted_metadata,
-            license_plate=license_plate,  # Plaintext
-            color=color,                  # Plaintext
-            body_type=body_type,          # Plaintext
-            image_path=image_path,        # Plaintext
+            license_plate=license_plate,  
+            color=color,                  
+            body_type=body_type,          
+            image_path=image_path,        
         )
         
         db.add(vehicle)
@@ -76,9 +73,6 @@ def pir_search_true(
     top_k: int = 10,
     verbose: bool = False,
 ) -> List[Dict]:
-    """
-    TRUE PIR търсене - използва САМО криптирани данни.
-    """
     db = get_db()
     
     try:
@@ -95,8 +89,8 @@ def pir_search_true(
         vehicles = db.query(Vehicle).all()
         
         if verbose:
-            print(f"Query prep: {prep_time*1000:.2f}ms")
-            print(f"Server scanning: {len(vehicles)} vehicles")
+            print(f"Подготовка на заявката: {prep_time*1000:.2f}ms")
+            print(f"Сканиране от сървъра: {len(vehicles)} vehicles")
         
         if not vehicles:
             return []
@@ -125,7 +119,7 @@ def pir_search_true(
         
         for r in encrypted_results:
             sim = decrypt_embedding_simple(r["encrypted_similarity"])
-            score = float(sim[1])
+            score = float(sim[0])
             
             decrypted.append({
                 "vehicle_id": r["vehicle_id"],
@@ -163,7 +157,7 @@ def pir_search_true(
         if verbose:
             total = prep_time + server_time
             print(f"Server time: {server_time*1000:.2f}ms")
-            print(f"Total PIR: {total*1000:.2f}ms")
+            print(f"Общо: {total*1000:.2f}ms")
         
         return final_results
         
@@ -218,7 +212,6 @@ def delete_vehicle(vehicle_uuid: str) -> bool:
 
 
 def get_database_stats() -> Dict:
-    """Статистика за базата данни"""
     db = get_db()
     
     try:
@@ -239,7 +232,6 @@ def get_database_stats() -> Dict:
 
 
 def get_encryption_stats() -> Dict:
-    """Статистика за криптирането"""
     stats = get_database_stats()
     
     plain_size = 256 * 4

@@ -1,6 +1,3 @@
-"""
-SQLAlchemy модел за TRUE PIR с plaintext за UI
-"""
 from sqlalchemy import Column, Integer, String, DateTime, LargeBinary
 from datetime import datetime
 from storage.database.connection import Base
@@ -8,7 +5,7 @@ from storage.database.connection import Base
 
 class Vehicle(Base):
     """
-    Модел за превозно средство
+    Модел за превозното средство
     
     Архитектура:
     - Криптирани данни за PIR
