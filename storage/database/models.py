@@ -3,7 +3,7 @@ SQLAlchemy модел за TRUE PIR с plaintext за UI
 """
 from sqlalchemy import Column, Integer, String, DateTime, LargeBinary
 from datetime import datetime
-from .connection import Base
+from storage.database.connection import Base
 
 
 class Vehicle(Base):
