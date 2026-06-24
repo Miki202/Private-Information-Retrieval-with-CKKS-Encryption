@@ -4,7 +4,7 @@ from PIL import Image
 import time
 import sys
 
-from ui.utils import load_encoder_model, encode_image
+from utils import encode_image
 from storage.database.operations import (
     pir_search_true,
     get_all_vehicles
@@ -42,15 +42,7 @@ st.markdown(
 
 st.divider()
 
-@st.cache_resource
-def get_model():
-    try:
-        model, device = load_encoder_model("encoder.pth")
-        return model, device, True
-    except Exception:
-        return None, None, False
-
-model, device, model_loaded = get_model()
+model_loaded = True
 
 def show_step(step_container, text, delay=1.0):
     with step_container:
@@ -99,7 +91,7 @@ if query_img:
                 show_step(step, "Encoder не е наличен - използва се демо режим")
                 embedding = None
             else:
-                embedding = encode_image(image, model, device)
+                embedding = encode_image(image)
 
             show_step(step, "Стъпка 3: Подготовка на PIR заявка")
             show_step(step, "Стъпка 4: Изпращане на криптирана заявка към сървъра")
@@ -140,11 +132,13 @@ if query_img:
         for i, r in enumerate(results, 1):
             v = r["vehicle"]
             rows.append({
-                "Ранг": i,
-                "Сходство": f"{r['similarity_score'] * 100:.2f}%",
-                "Регистрационен номер": v.get("license_plate"),
-                "Цвят": v.get("color"),
-                "Тип": v.get("body_type"),
+                "ID": v.id,
+                "UUID": str(v.vehicle_uuid)[:13] + "...",
+                "Рег. номер": v.license_plate or "—",
+                "Цвят": v.color or "—",
+                "Тип": v.body_type or "—",
+                "Добавен": v.created_at.strftime("%Y-%m-%d %H:%M") if v.created_at else "—",
+                "_full_uuid": v.vehicle_uuid
             })
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
