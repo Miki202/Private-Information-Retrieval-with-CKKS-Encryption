@@ -3,6 +3,7 @@
 venv/
 __pycache__/
 .DS_Store
+artifacts/demo/PIR_demo.mp4
 
 notebooks/dataset/images/
 notebooks/dataset/dataset_split/
