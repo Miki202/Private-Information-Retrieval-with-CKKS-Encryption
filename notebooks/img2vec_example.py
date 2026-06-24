@@ -1,5 +1,3 @@
-
-
 from pathlib import Path
 
 import numpy as np
@@ -15,11 +13,10 @@ from transformers import AutoModel
 HF_REPO_ID = "quebeccyb/vehitv-cropped" 
 IMG_SIZE   = 256
 THRESHOLD  = 0.45  
-DEVICE     = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE= "cuda" if torch.cuda.is_available() else "cpu"
 
 
 class Letterbox:
-    """Resize keeping aspect ratio, pad the rest with a constant fill colour."""
     def __init__(self, size: int, fill: int = 0):
         self.size = size
         self.fill = fill
@@ -36,32 +33,19 @@ class Letterbox:
 
 preprocess = transforms.Compose([
     Letterbox(IMG_SIZE),
-    transforms.ToTensor(),
-])
-
-
-# ---------------------------------------------------------------------------
-# Model
-# ---------------------------------------------------------------------------
+    transforms.ToTensor(),])
 model = AutoModel.from_pretrained(HF_REPO_ID, trust_remote_code=True).to(DEVICE).eval()
-
 
 @torch.no_grad()
 def encode(pil_image: Image.Image) -> torch.Tensor:
-    """RGB PIL image -> L2-normalised 256-D embedding on DEVICE."""
     x = preprocess(pil_image.convert("RGB")).unsqueeze(0).to(DEVICE)
     emb = model(x).squeeze(0)
     return F.normalize(emb, dim=0)
 
 
 def cosine(a: torch.Tensor, b: torch.Tensor) -> float:
-    """Cosine similarity for L2-normalised vectors == dot product."""
     return float((a * b).sum())
 
-
-# ---------------------------------------------------------------------------
-# 1) Compare two images
-# ---------------------------------------------------------------------------
 def compare(path_a: str | Path, path_b: str | Path) -> dict:
     ea = encode(Image.open(path_a))
     eb = encode(Image.open(path_b))
@@ -72,10 +56,6 @@ def compare(path_a: str | Path, path_b: str | Path) -> dict:
         "threshold": THRESHOLD,
     }
 
-
-# ---------------------------------------------------------------------------
-# 2) Batched encoding for indexing a gallery
-# ---------------------------------------------------------------------------
 class _ImageListDataset(Dataset):
     def __init__(self, paths: list[Path], tf):
         self.paths = paths
@@ -90,7 +70,6 @@ class _ImageListDataset(Dataset):
 
 @torch.no_grad()
 def encode_many(paths: list[Path], batch_size: int = 64, num_workers: int = 2) -> np.ndarray:
-    """Encode many images at once. Returns (N, 256) float32 array of L2-normalised embeddings."""
     ds = _ImageListDataset(paths, preprocess)
     loader = DataLoader(ds, batch_size=batch_size, num_workers=num_workers)
     chunks = []
@@ -100,27 +79,13 @@ def encode_many(paths: list[Path], batch_size: int = 64, num_workers: int = 2) -
         chunks.append(e.cpu().numpy().astype("float32"))
     return np.concatenate(chunks, axis=0)
 
-
-# ---------------------------------------------------------------------------
-# 3) Top-K search in a gallery
-# ---------------------------------------------------------------------------
 def search(query_img: Image.Image, gallery_emb: np.ndarray, k: int = 5) -> list[tuple[int, float]]:
-    """Return list of (gallery_index, cosine_similarity) sorted by similarity desc."""
     q = encode(query_img).cpu().numpy().astype("float32")
     sims = gallery_emb @ q                       # (N,)
     top = np.argsort(-sims)[:k]
     return [(int(i), float(sims[i])) for i in top]
 
-
-# ---------------------------------------------------------------------------
-# Demo
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    # --- Pairwise comparison ---
-    # result = compare("car_a.jpg", "car_b.jpg")
-    # print(f"cosine={result['cosine']:.4f}  same_vehicle={result['same_vehicle']}")
-
-    # --- Build a gallery index and search ---
     gallery_dir = Path("gallery")
     if gallery_dir.exists():
         gallery_paths = sorted(gallery_dir.glob("*.jpg"))

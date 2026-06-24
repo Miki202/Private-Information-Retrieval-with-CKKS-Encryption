@@ -3,6 +3,16 @@
 venv/
 __pycache__/
 .DS_Store
+artifacts/demo/PIR_demo.mp4
+
+notebooks/dataset/images/
+notebooks/dataset/dataset_split/
+notebooks/dataset/pairs/
+notebooks/dataset/*.zip
+notebooks/dataset/*.csv
+
+notebooks/img2vec/checkpoints/
+*.pth
 
 notebooks/dataset/images/
 notebooks/dataset/dataset_split/

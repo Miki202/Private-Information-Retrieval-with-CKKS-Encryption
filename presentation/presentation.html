@@ -1,701 +1,781 @@
 <!DOCTYPE html>
 <html lang="bg">
+
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Поверително търсене на автомобили чрез CKKS Хомоморфно Криптиране</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
-<style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Поверително търсене на автомобили чрез CKKS Хомоморфно Криптиране</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #0f172a;
+            --text-light: #475569;
+            --accent: #2563eb;
+            --accent-alt: #7c3aed;
+            --border: #e2e8f0;
+        }
 
-:root {
-    --bg: #f8fafc;
-    --card: #ffffff;
-    --text: #0f172a;
-    --text-light: #475569;
-    --accent: #2563eb;
-    --accent-alt: #7c3aed;
-    --border: #e2e8f0;
-}
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
+        html,
+        body {
+            height: 100%;
+            width: 100%;
+        }
 
-html, body {
-    height: 100%;
-    width: 100%;
-}
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            overflow: hidden;
+        }
 
-body {
-    font-family: 'Inter', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    overflow: hidden;
-}
+        .presentation {
+            height: 100vh;
+            overflow-y: scroll;
+            scroll-snap-type: y mandatory;
+            scroll-behavior: smooth;
+        }
 
-.presentation {
-    height: 100vh;
-    overflow-y: scroll;
-    scroll-snap-type: y mandatory;
-    scroll-behavior: smooth;
-}
+        .slide {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            scroll-snap-align: start;
+            padding: 40px 30px;
+            position: relative;
+        }
 
-.slide {
-    height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    scroll-snap-align: start;
-    padding: 40px 30px;
-    position: relative;
-}
+        .slide.dark {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        }
 
-.slide.dark {
-    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-}
+        .slide.dark h1,
+        .slide.dark h2 {
+            color: white;
+        }
 
-.slide.dark h1,
-.slide.dark h2 {
-    color: white;
-}
+        .slide.dark p,
+        .slide.dark li {
+            color: #cbd5e1;
+        }
 
-.slide.dark p,
-.slide.dark li {
-    color: #cbd5e1;
-}
+        .box {
+            width: min(1100px, 95vw);
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 45px 50px;
+            box-shadow: 0 10px 40px rgba(15, 23, 42, 0.08);
+            opacity: 0;
+            animation: fadeInScale 0.8s ease forwards;
+        }
 
-.box {
-    width: min(1100px, 95vw);
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: 45px 50px;
-    box-shadow: 0 10px 40px rgba(15, 23, 42, 0.08);
-    opacity: 0;
-    animation: fadeInScale 0.8s ease forwards;
-}
+        .slide.dark .box {
+            background: rgba(30, 41, 59, 0.9);
+            border-color: rgba(100, 116, 139, 0.3);
+        }
 
-.slide.dark .box {
-    background: rgba(30, 41, 59, 0.9);
-    border-color: rgba(100, 116, 139, 0.3);
-}
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: translateY(30px) scale(0.98);
+            }
 
-@keyframes fadeInScale {
-    from {
-        opacity: 0;
-        transform: translateY(30px) scale(0.98);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
 
-h1 {
-    font-size: clamp(2.2rem, 5vw, 3.5rem);
-    line-height: 1.15;
-    font-weight: 800;
-    margin-bottom: 20px;
-}
+        h1 {
+            font-size: clamp(2.2rem, 5vw, 3.5rem);
+            line-height: 1.15;
+            font-weight: 800;
+            margin-bottom: 20px;
+        }
 
-h2 {
-    font-size: clamp(1.8rem, 4vw, 2.5rem);
-    margin-bottom: 25px;
-    font-weight: 700;
-}
+        h2 {
+            font-size: clamp(1.8rem, 4vw, 2.5rem);
+            margin-bottom: 25px;
+            font-weight: 700;
+        }
 
-p, li {
-    font-size: 1.05rem;
-    line-height: 1.6;
-    color: var(--text-light);
-    margin-bottom: 12px;
-}
+        p,
+        li {
+            font-size: 1.05rem;
+            line-height: 1.6;
+            color: var(--text-light);
+            margin-bottom: 12px;
+        }
 
-strong {
-    color: var(--accent);
-    font-weight: 600;
-}
+        strong {
+            color: var(--accent);
+            font-weight: 600;
+        }
 
-.grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 18px;
-    margin-top: 25px;
-}
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 18px;
+            margin-top: 25px;
+        }
 
-.card {
-    padding: 24px;
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    background: #fff;
-    transition: all 0.3s ease;
-    animation: slideUp 0.6s ease forwards;
-    opacity: 0;
-}
+        .card {
+            padding: 24px;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background: #fff;
+            transition: all 0.3s ease;
+            animation: slideUp 0.6s ease forwards;
+            opacity: 0;
+        }
 
-.card:nth-child(1) { animation-delay: 0s; }
-.card:nth-child(2) { animation-delay: 0.1s; }
-.card:nth-child(3) { animation-delay: 0.2s; }
-.card:nth-child(4) { animation-delay: 0.3s; }
+        .card:nth-child(1) {
+            animation-delay: 0s;
+        }
 
-@keyframes slideUp {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
+        .card:nth-child(2) {
+            animation-delay: 0.1s;
+        }
 
-.card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 24px rgba(37, 99, 235, 0.12);
-    border-color: var(--accent);
-}
+        .card:nth-child(3) {
+            animation-delay: 0.2s;
+        }
 
-.card h3 {
-    font-size: 1.1rem;
-    color: var(--text);
-    margin-bottom: 10px;
-    font-weight: 700;
-}
+        .card:nth-child(4) {
+            animation-delay: 0.3s;
+        }
 
-.card p {
-    font-size: 0.95rem;
-    margin: 0;
-}
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
 
-.pipeline {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-top: 20px;
-}
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
 
-.step {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 14px 20px;
-    border-left: 3px solid var(--accent);
-    background: #f1f5f9;
-    border-radius: 10px;
-    opacity: 0;
-    animation: slideLeft 0.5s ease forwards;
-}
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(37, 99, 235, 0.12);
+            border-color: var(--accent);
+        }
 
-.step:nth-child(1) { animation-delay: 0s; }
-.step:nth-child(2) { animation-delay: 0.1s; }
-.step:nth-child(3) { animation-delay: 0.2s; }
-.step:nth-child(4) { animation-delay: 0.3s; }
+        .card h3 {
+            font-size: 1.1rem;
+            color: var(--text);
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
 
-@keyframes slideLeft {
-    from {
-        opacity: 0;
-        transform: translateX(-20px);
-    }
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
+        .card p {
+            font-size: 0.95rem;
+            margin: 0;
+        }
 
-.step-num {
-    min-width: 36px;
-    height: 36px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, var(--accent), var(--accent-alt));
-    color: white;
-    border-radius: 50%;
-    font-weight: 700;
-    font-size: 0.95rem;
-}
+        .pipeline {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 20px;
+        }
 
-.step-text h4 {
-    font-size: 1rem;
-    color: var(--text);
-    margin-bottom: 2px;
-    font-weight: 600;
-}
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 14px 20px;
+            border-left: 3px solid var(--accent);
+            background: #f1f5f9;
+            border-radius: 10px;
+            opacity: 0;
+            animation: slideLeft 0.5s ease forwards;
+        }
 
-.step-text p {
-    font-size: 0.88rem;
-    margin: 0;
-}
+        .step:nth-child(1) {
+            animation-delay: 0s;
+        }
 
-.two-col {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 25px;
-    margin-top: 20px;
-}
+        .step:nth-child(2) {
+            animation-delay: 0.1s;
+        }
 
-.comparison-col {
-    padding: 24px;
-    border-radius: 14px;
-    background: #f8fafc;
-    border: 1px solid var(--border);
-}
+        .step:nth-child(3) {
+            animation-delay: 0.2s;
+        }
 
-.comparison-col h3 {
-    font-size: 1.15rem;
-    margin-bottom: 16px;
-    font-weight: 700;
-}
+        .step:nth-child(4) {
+            animation-delay: 0.3s;
+        }
 
-.comparison-col ul {
-    list-style: none;
-    padding: 0;
-}
+        @keyframes slideLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
 
-.comparison-col li {
-    padding-left: 20px;
-    position: relative;
-    font-size: 0.95rem;
-    margin-bottom: 12px;
-}
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
 
-.comparison-col li::before {
-    content: "•";
-    position: absolute;
-    left: 0;
-    color: var(--accent);
-    font-weight: bold;
-    font-size: 1.2rem;
-    top: -2px;
-}
+        .step-num {
+            min-width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--accent), var(--accent-alt));
+            color: white;
+            border-radius: 50%;
+            font-weight: 700;
+            font-size: 0.95rem;
+        }
 
-.center {
-    text-align: center;
-}
+        .step-text h4 {
+            font-size: 1rem;
+            color: var(--text);
+            margin-bottom: 2px;
+            font-weight: 600;
+        }
 
-.highlight-box {
-    padding: 18px;
-    background: #eff6ff;
-    border-left: 3px solid var(--accent);
-    border-radius: 8px;
-    margin-top: 15px;
-}
+        .step-text p {
+            font-size: 0.88rem;
+            margin: 0;
+        }
 
-.highlight-box p {
-    margin: 0;
-    font-size: 0.95rem;
-}
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin-top: 20px;
+        }
 
-.video-container {
-    position: relative;
-    width: 100%;
-    padding-bottom: 42%;
-    background: #000;
-    border-radius: 12px;
-    overflow: hidden;
-    margin-top: 15px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
+        .comparison-col {
+            padding: 24px;
+            border-radius: 14px;
+            background: #f8fafc;
+            border: 1px solid var(--border);
+        }
 
-.video-container iframe {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    border: none;
-}
+        .comparison-col h3 {
+            font-size: 1.15rem;
+            margin-bottom: 16px;
+            font-weight: 700;
+        }
 
-table.performance-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 15px;
-    font-size: 0.9rem;
-}
+        .comparison-col ul {
+            list-style: none;
+            padding: 0;
+        }
 
-table.performance-table th, table.performance-table td {
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    text-align: left;
-}
+        .comparison-col li {
+            padding-left: 20px;
+            position: relative;
+            font-size: 0.95rem;
+            margin-bottom: 12px;
+        }
 
-table.performance-table th {
-    background-color: #f1f5f9;
-    font-weight: 700;
-}
+        .comparison-col li::before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: var(--accent);
+            font-weight: bold;
+            font-size: 1.2rem;
+            top: -2px;
+        }
 
-.presentation.presenting { overflow: hidden; }
-.presentation.presenting .slide { display: none !important; opacity: 0; pointer-events: none; }
-.presentation.presenting .slide.active { display: flex !important; opacity: 1; pointer-events: auto; }
+        .center {
+            text-align: center;
+        }
 
-.slide-nav {
-    position: fixed;
-    bottom: 22px;
-    right: 22px;
-    z-index: 9999;
-    display: flex;
-    gap: 8px;
-}
-.slide-nav button {
-    background: rgba(0,0,0,0.7);
-    color: white;
-    border: none;
-    padding: 10px 16px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-weight: 600;
-    font-size: 0.9rem;
-    transition: background 0.2s;
-}
-.slide-nav button:hover { background: rgba(0,0,0,0.9); }
+        .highlight-box {
+            padding: 18px;
+            background: #eff6ff;
+            border-left: 3px solid var(--accent);
+            border-radius: 8px;
+            margin-top: 15px;
+        }
 
-@media print {
-    html, body, .presentation {
-        height: auto !important;
-        overflow: visible !important;
-        scroll-snap-type: none !important;
-        background: #fff !important;
-    }
-    .slide {
-        height: 100vh !important;
-        max-height: 100vh !important;
-        page-break-after: always !important;
-        page-break-inside: avoid !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        background: #fff !important;
-        padding: 20px !important;
-    }
-    .slide.dark {
-        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-    }
-    .box {
-        opacity: 1 !important;
-        transform: none !important;
-        animation: none !important;
-        box-shadow: none !important;
-        width: 100% !important;
-        max-width: 1050px !important;
-        padding: 30px !important;
-    }
-    .card, .step {
-        opacity: 1 !important;
-        transform: none !important;
-        animation: none !important;
-    }
-    .slide-nav {
-        display: none !important;
-    }
-}
-</style>
+        .highlight-box p {
+            margin: 0;
+            font-size: 0.95rem;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            padding-bottom: 42%;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-top: 15px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .video-container iframe,
+        .video-container video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: #000;
+            object-fit: contain;
+        }
+
+        table.performance-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 0.9rem;
+        }
+
+        table.performance-table th,
+        table.performance-table td {
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            text-align: left;
+        }
+
+        table.performance-table th {
+            background-color: #f1f5f9;
+            font-weight: 700;
+        }
+
+        .presentation.presenting {
+            overflow: hidden;
+        }
+
+        .presentation.presenting .slide {
+            display: none !important;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .presentation.presenting .slide.active {
+            display: flex !important;
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .slide-nav {
+            position: fixed;
+            bottom: 22px;
+            right: 22px;
+            z-index: 9999;
+            display: flex;
+            gap: 8px;
+        }
+
+        .slide-nav button {
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: background 0.2s;
+        }
+
+        .slide-nav button:hover {
+            background: rgba(0, 0, 0, 0.9);
+        }
+
+        @media print {
+
+            html,
+            body,
+            .presentation {
+                height: auto !important;
+                overflow: visible !important;
+                scroll-snap-type: none !important;
+                background: #fff !important;
+            }
+
+            .slide {
+                height: 100vh !important;
+                max-height: 100vh !important;
+                page-break-after: always !important;
+                page-break-inside: avoid !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                background: #fff !important;
+                padding: 20px !important;
+            }
+
+            .slide.dark {
+                background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+
+            .box {
+                opacity: 1 !important;
+                transform: none !important;
+                animation: none !important;
+                box-shadow: none !important;
+                width: 100% !important;
+                max-width: 1050px !important;
+                padding: 30px !important;
+            }
+
+            .card,
+            .step {
+                opacity: 1 !important;
+                transform: none !important;
+                animation: none !important;
+            }
+
+            .slide-nav {
+                display: none !important;
+            }
+        }
+    </style>
 </head>
+
 <body>
 
-<div class="presentation">
+    <div class="presentation">
 
-<section class="slide dark">
-<div class="box center">
-<h1>Поверително търсене на автомобили<br/>чрез CKKS Хомоморфно Криптиране</h1>
-<p style="margin-top: 25px; font-size: 1.2rem; color: #cbd5e1;">
-Локално извличане на характеристики чрез изкуствен интелект и поверително търсене в облачна среда (PIR)
-</p>
-<p style="margin-top: 40px; font-size: 1.1rem; color: #94a3b8;">
-    Михаела Папаринова, специалност "Анализ на данни", курс 4, ФН: 8MI0200032 <br/>
-    Андрий Масло, специалност "Анализ на данни", курс 4, ФН: 3MI8000037 <br/>
-    Учебна година 2025/2026
-</p>
-</div>
-</section>
-
-<section class="slide">
-<div class="box">
-<h2>1. Мотивация и дефиниция на проблема</h2>
-<p>
-    При традиционните облачни решения сървърът има директен достъп до всички данни. Това изисква пълно доверие към доставчика и създава риск при пробив в сигурността.<p style="margin-top: 15px;">
-    <strong>Основното предизвикателство:</strong> Как да извлечем полезна информация от неструктурирано изображение и да извършим търсене, без сървърът да има достъп до съдържанието на самата заявка?
-</p>
-<div class="highlight-box">
-<p><strong>Технологично решение:</strong> Локално извличане на ембединги и метаданни → <strong>хомоморфно криптиране (CKKS) </strong> → съхранение → криптирана заявка → търсене върху криптирани данни.</p>
-</div>
-</div>
-</section>
-
-<section class="slide">
-<div class="box">
-<h2>2. Архитектура и жизнен цикъл на данните</h2>
-<div class="pipeline">
-<div class="step">
-<div class="step-num">1</div>
-<div class="step-text">
-<h4>Обработка</h4>
-<p>YOLOv8n + CNN извличат метаданните.</p>
-</div>
-</div>
-
-<div class="step">
-<div class="step-num">2</div>
-<div class="step-text">
-<h4>CKKS Хомоморфно криптиране</h4>
-<p>Информацията се трансформира в двоичен масив с размер около 600KB, напълно защитен от външен достъп.</p>
-</div>
-</div>
-
-<div class="step">
-<div class="step-num">3</div>
-<div class="step-text">
-<h4>Търсене</h4>
-<p>Системата извършва математическо сравнение и изчислява сходства директно върху криптирания масив от данни, без да го декриптира.</p>
-</div>
-</div>
-
-<div class="step">
-<div class="step-num">4</div>
-<div class="step-text">
-<h4>Получаване на резултата</h4>
-<p>Единствено оторизиран потребител, притежаващ частния ключ, може да декриптира върнатите от сървъра съвпадения.</p>
-</div>
-</div>
-</div>
-</div>
-</section>
-
-<section class="slide">
-    <div class="box">
-    <h2>3. Модели за обработка и извличане на данни</h2>
-    <p style="margin-bottom: 20px;">
-        Преди криптирането на изображението се извличат ембединги и съответните метаданни.</p>
-    <div class="grid">
-    <div class="card">
-        <h3 style="color: var(--accent);">YOLOv8n</h3>
-        <p>Локализира автомобила и регистрационния номер в изображението.</p>
-    </div>
-    <div class="card">
-        <h3 style="color: var(--accent-alt);">CNN модел</h3>
-        <p>Разпознава символите на регистрационния номер.</p>
-    </div>
-    <div class="card">
-        <h3 style="color: #059669;">Клъстеризация</h3>
-        <p>Определя доминиращия цвят на автомобила.</p>
-    </div>
-    </div>
-    <div class="highlight-box" style="background: #f0fdf4; border-color: #16a34a; margin-top: 25px;">
-    <p style="color: #166534;"><strong>Краен резултат:</strong> От изображението се извличат структурирани метаданни – регистрационен номер и цвят, които след това се криптират.</p>
-    </div>
-    </div>
-    </section>
-
-    <section class="slide">
-        <div class="box">
-        <h2>3. Математически механизъм на схемата CKKS</h2>
-        <p style="margin-bottom: 20px;">
-            CKKS (Cheon-Kim-Kim-Song) е схема за напълно хомоморфно криптиране (FHE).
-        </p>
-        <div class="pipeline">
-            <div class="step" style="border-left-color: var(--accent-alt); background: #f8fafc;">
-                <div class="step-num" style="background: var(--accent-alt);">A</div>
-                <div class="step-text">
-                    <h4>Кодиране (Encoding)</h4>
-                    <p>Векторът с числени данни (например компонентите на цвета) се мащабира с предварително дефиниран коефициент <strong>2<sup>40</sup></strong> и се трансформира в полином.</p>
-                </div>
+        <section class="slide dark">
+            <div class="box center">
+                <h1>Поверително търсене на автомобили<br />чрез CKKS Хомоморфно Криптиране</h1>
+                <p style="margin-top: 25px; font-size: 1.2rem; color: #cbd5e1;">
+                    Локално извличане на характеристики чрез изкуствен интелект и поверително търсене в облачна среда
+                    (PIR)
+                </p>
+                <p style="margin-top: 40px; font-size: 1.1rem; color: #94a3b8;">
+                    Михаела Папаринова, специалност "Анализ на данни", курс 4, ФН: 8MI0200032 <br />
+                    Андрий Масло, специалност "Анализ на данни", курс 4, ФН: 3MI8000037 <br />
+                    Учебна година 2025/2026
+                </p>
             </div>
-            <div class="step" style="border-left-color: var(--accent-alt); background: #f8fafc;">
-                <div class="step-num" style="background: var(--accent-alt);">B</div>
-                <div class="step-text">
-                    <h4>Криптиране с контролиран шум (RLWE)</h4>
-                    <p>Към кодирания полином се добавя малко количество криптографски шум. Сигурността на схемата се гарантира от математическата трудност на проблема Ring Learning With Errors (RLWE).</p>
-                </div>
-            </div>
-            <div class="step" style="border-left-color: var(--accent-alt); background: #f8fafc;">
-                <div class="step-num" style="background: var(--accent-alt);">C</div>
-                <div class="step-text">
-                    <h4>Динамично премащабиране (Rescaling)</h4>
-                    <p>При хомоморфно умножение размерът на шума нараства квадратично. CKKS отрязва най-малко значимите битове (подобно на закръгляне), за да запази стабилността на последващите операции.</p>
-                </div>
-            </div>
-        </div>
-        </div>
         </section>
 
-<section class="slide">
-<div class="box">
-<h2>5. Производителност</h2>
-<p style="margin-bottom: 10px;">
-    Сравнение на <strong>разработената CKKS архитектура</strong> с <strong>2-Server MPC (Многостранно изчисление)</strong>.
-</p>
-<table class="performance-table">
-<thead>
-<tr>
-<th>Стъпка</th>
-<th>Архитектура А (CKKS)</th>
-<th>Архитектура Б (MPC)</th>
-<th>Основно технологично ограничение</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>1. Обработка на заявката</td>
-<td>Подготовка на сървъра + 8.0 ms</td>
-<td>Разделяне при клиента + 8.0 ms</td>
-<td>Капацитет на мрежaта</td>
-</tr>
-<tr>
-<td><strong>2. Изчислителна фаза (Сървър)</strong></td>
-<td><strong>Хомоморфно сканиране</strong></td>
-<td>Обработка и време за обмен на данни между сървърите</td>
-<td><strong>CKKS: Процесор / MPC: Мрежа</strong></td>
-</tr>
-<tr>
-<td>3. Отговор</td>
-<td>Изпращане от сървъра + 8.0 ms</td>
-<td>Възстановяване на данните + 8.0 ms</td>
-<td>Размер на криптирания текст</td>
-</tr>
-<tr>
-<td style="font-weight:bold; color:var(--accent);">Общо закъснение на системата</td>
-<td style="font-weight:bold; color:var(--accent);">~ 346.10 ms</td>
-<td style="font-weight:bold; color:#16a34a;">~ 20.06 ms</td>
-<td>Зависи от размера на базата данни N</td>
-</tr>
-</tbody>
-</table>
-<div class="highlight-box" style="background: #eff6ff; border-color: var(--accent); margin-top: 15px;">
-<p><strong>Анализ на резултатите:</strong> Данните показват, че MPC има значително по-ниска изчислителна латентност.</p>
-</div>
-</div>
-</section>
+        <section class="slide">
+            <div class="box">
+                <h2>1. Мотивация и дефиниция на проблема</h2>
+                <p>
+                    При традиционните облачни решения сървърът има директен достъп до всички данни. Това изисква пълно
+                    доверие към доставчика и създава риск при пробив в сигурността.
+                <p style="margin-top: 15px;">
+                    <strong>Основното предизвикателство:</strong> Как да извлечем полезна информация от неструктурирано
+                    изображение и да извършим търсене, без сървърът да има достъп до съдържанието на самата заявка?
+                </p>
+                <div class="highlight-box">
+                    <p><strong>Технологично решение:</strong> Локално извличане на ембединги и метаданни →
+                        <strong>хомоморфно криптиране (CKKS) </strong> → съхранение → криптирана заявка → търсене върху
+                        криптирани данни.
+                    </p>
+                </div>
+            </div>
+        </section>
 
-<section class="slide">
-<div class="box">
-<h2>6. Защо CKKS?</h2>
-<div class="two-col">
-    <div class="comparison-col" style="border-color: #fee2e2; background: #fef2f2;">
-        <h3 style="color: #991b1b;">Ограничения на MPC архитектурата</h3>
-        <ul>
-            <li>Изисква поне два независими сървъра.</li>
-            <li>Изисква постоянна комуникация между сървърите за всяка операция.</li>
-            <li>Риск при компрометиране на повече от един сървър.</li>
-        </ul>
+        <section class="slide">
+            <div class="box">
+                <h2>2. Архитектура и жизнен цикъл на данните</h2>
+                <div class="pipeline">
+                    <div class="step">
+                        <div class="step-num">1</div>
+                        <div class="step-text">
+                            <h4>Обработка</h4>
+                            <p>YOLOv8n + CNN извличат метаданните.</p>
+                        </div>
+                    </div>
+
+                    <div class="step">
+                        <div class="step-num">2</div>
+                        <div class="step-text">
+                            <h4>CKKS Хомоморфно криптиране</h4>
+                            <p>Информацията се трансформира в двоичен масив с размер около 600KB, напълно защитен от
+                                външен достъп.</p>
+                        </div>
+                    </div>
+
+                    <div class="step">
+                        <div class="step-num">3</div>
+                        <div class="step-text">
+                            <h4>Търсене</h4>
+                            <p>Системата извършва математическо сравнение и изчислява сходства директно върху
+                                криптирания масив от данни, без да го декриптира.</p>
+                        </div>
+                    </div>
+
+                    <div class="step">
+                        <div class="step-num">4</div>
+                        <div class="step-text">
+                            <h4>Получаване на резултата</h4>
+                            <p>Единствено оторизиран потребител, притежаващ частния ключ, може да декриптира върнатите
+                                от сървъра съвпадения.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="slide">
+            <div class="box">
+                <h2>3. Модели за обработка и извличане на данни</h2>
+                <p style="margin-bottom: 20px;">
+                    Преди криптирането на изображението се извличат ембединги и съответните метаданни.</p>
+                <div class="grid">
+                    <div class="card">
+                        <h3 style="color: var(--accent);">YOLOv8n</h3>
+                        <p>Локализира автомобила и регистрационния номер в изображението.</p>
+                    </div>
+                    <div class="card">
+                        <h3 style="color: var(--accent-alt);">CNN модел</h3>
+                        <p>Разпознава символите на регистрационния номер.</p>
+                    </div>
+                    <div class="card">
+                        <h3 style="color: #059669;">Клъстеризация</h3>
+                        <p>Определя доминиращия цвят на автомобила.</p>
+                    </div>
+                </div>
+                <div class="highlight-box" style="background: #f0fdf4; border-color: #16a34a; margin-top: 25px;">
+                    <p style="color: #166534;"><strong>Краен резултат:</strong> От изображението се извличат
+                        структурирани метаданни – регистрационен номер и цвят, които след това се криптират.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="slide">
+            <div class="box">
+                <h2>3. Математически механизъм на схемата CKKS</h2>
+                <p style="margin-bottom: 20px;">
+                    CKKS (Cheon-Kim-Kim-Song) е схема за напълно хомоморфно криптиране (FHE).
+                </p>
+                <div class="pipeline">
+                    <div class="step" style="border-left-color: var(--accent-alt); background: #f8fafc;">
+                        <div class="step-num" style="background: var(--accent-alt);">A</div>
+                        <div class="step-text">
+                            <h4>Кодиране (Encoding)</h4>
+                            <p>Векторът с числени данни (например компонентите на цвета) се мащабира с предварително
+                                дефиниран коефициент <strong>2<sup>40</sup></strong> и се трансформира в полином.</p>
+                        </div>
+                    </div>
+                    <div class="step" style="border-left-color: var(--accent-alt); background: #f8fafc;">
+                        <div class="step-num" style="background: var(--accent-alt);">B</div>
+                        <div class="step-text">
+                            <h4>Криптиране с контролиран шум (RLWE)</h4>
+                            <p>Към кодирания полином се добавя малко количество криптографски шум. Сигурността на
+                                схемата се гарантира от математическата трудност на проблема Ring Learning With Errors
+                                (RLWE).</p>
+                        </div>
+                    </div>
+                    <div class="step" style="border-left-color: var(--accent-alt); background: #f8fafc;">
+                        <div class="step-num" style="background: var(--accent-alt);">C</div>
+                        <div class="step-text">
+                            <h4>Динамично премащабиране (Rescaling)</h4>
+                            <p>При хомоморфно умножение размерът на шума нараства квадратично. CKKS отрязва най-малко
+                                значимите битове (подобно на закръгляне), за да запази стабилността на последващите
+                                операции.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="slide">
+            <div class="box">
+                <h2>5. Производителност</h2>
+                <p style="margin-bottom: 10px;">
+                    Сравнение на <strong>разработената CKKS архитектура</strong> с <strong>2-Server MPC (Многостранно
+                        изчисление)</strong>.
+                </p>
+                <table class="performance-table">
+                    <thead>
+                        <tr>
+                            <th>Стъпка</th>
+                            <th>Архитектура А (CKKS)</th>
+                            <th>Архитектура Б (MPC)</th>
+                            <th>Основно технологично ограничение</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>1. Обработка на заявката (Uplink)</td>
+                            <td>Подготовка + Път (17.53 ms)</td>
+                            <td>Разделяне при клиента + Път (8.07 ms)</td>
+                            <td>Капацитет на мрежата</td>
+                        </tr>
+                        <tr>
+                            <td><strong>2. Изчислителна фаза (Сървър)</strong></td>
+                            <td><strong>Хомоморфно сканиране (88 791.21 ms)</strong></td>
+                            <td>Обработка и време за обмен между сървърите (11.71 ms)</td>
+                            <td><strong>CKKS: Процесор / MPC: Мрежа</strong></td>
+                        </tr>
+                        <tr>
+                            <td>3. Отговор (Downlink)</td>
+                            <td>Резолюция + Връщане (6 606.95 ms)</td>
+                            <td>Възстановяване на данните (8.58 ms)</td>
+                            <td>Размер на криптирания текст</td>
+                        </tr>
+                        <tr>
+                            <td style="font-weight:bold; color:var(--accent);">Общо закъснение на системата</td>
+                            <td style="font-weight:bold; color:var(--accent);">95 415.69 ms (~95.42 s)</td>
+                            <td style="font-weight:bold; color:#16a34a;">28.35 ms</td>
+                            <td>Линейно сканиране O(N) при N = 3307</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="highlight-box" style="background: #eff6ff; border-color: var(--accent); margin-top: 15px;">
+                    <p><strong>Анализ на резултатите:</strong> Данните показват, че MPC има значително по-ниска
+                        изчислителна латентност.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="slide">
+            <div class="box">
+                <h2>6. Защо CKKS?</h2>
+                <div class="two-col">
+                    <div class="comparison-col" style="border-color: #fee2e2; background: #fef2f2;">
+                        <h3 style="color: #991b1b;">Ограничения на MPC архитектурата</h3>
+                        <ul>
+                            <li>Изисква поне два независими сървъра.</li>
+                            <li>Изисква постоянна комуникация между сървърите за всяка операция.</li>
+                            <li>Риск при компрометиране на повече от един сървър.</li>
+                        </ul>
+                    </div>
+                    <div class="comparison-col" style="border-color: #dcfce7; background: #f0fdf4;">
+                        <h3 style="color: #166534;">Предимства на CKKS</h3>
+                        <ul>
+                            <li>Един сървър извършва всички изчисления.</li>
+                            <li>Няма обмен на междинни данни.</li>
+                            <li>Данните остават криптирани през целия процес.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="slide">
+            <div class="box">
+                <h2>7. Демо</h2>
+                <div class="video-container">
+                    <video controls preload="auto">
+                        <source src="../artifacts/demo/PIR_demo.mp4" type="video/mp4">
+                    </video>
+                </div>
+            </div>
+        </section>
+
+        <section class="slide dark">
+            <div class="box center">
+                <h1>Благодаря за вниманието!</h1>
+                <p style="margin-top: 25px; font-size: 1.3rem; color: #60a5fa;">Въпроси?</p>
+            </div>
+        </section>
+
     </div>
-    <div class="comparison-col" style="border-color: #dcfce7; background: #f0fdf4;">
-        <h3 style="color: #166534;">Предимства на CKKS</h3>
-        <ul>
-            <li>Един сървър извършва всички изчисления.</li>
-            <li>Няма обмен на междинни данни.</li>
-            <li>Данните остават криптирани през целия процес.</li>
-        </ul>
-    </div>
-</div>
-</div>
-</section>
 
-<section class="slide">
-<div class="box">
-<h2>7. Демо</h2>
-<div class="video-container">
-    <iframe src="https://www.youtube.com/embed/dQw4w9WgXcQ" allowfullscreen></iframe>
-</div>
-</div>
-</section>
+    <script>
+        (function () {
+            const container = document.querySelector('.presentation');
+            const slides = Array.from(document.querySelectorAll('.slide'));
+            let idx = 0;
 
-<section class="slide dark">
-<div class="box center">
-<h1>Благодаря за вниманието!</h1>
-<p style="margin-top: 25px; font-size: 1.3rem; color: #60a5fa;">Въпроси?</p>
-</div>
-</section>
+            function showSlide(i) {
+                idx = Math.max(0, Math.min(i, slides.length - 1));
+                slides.forEach((s, j) => s.classList.toggle('active', j === idx));
+                const focusable = slides[idx].querySelector('button, a, input, [tabindex]');
+                if (focusable) focusable.focus();
+            }
 
-</div>
+            function next() { showSlide(idx + 1); }
+            function prev() { showSlide(idx - 1); }
 
-<script>
-(function(){
-  const container = document.querySelector('.presentation');
-  const slides = Array.from(document.querySelectorAll('.slide'));
-  let idx = 0;
+            function startPresentation() {
+                container.classList.add('presenting');
+                document.documentElement.requestFullscreen?.();
+                showSlide(0);
+            }
 
-  function showSlide(i){
-    idx = Math.max(0, Math.min(i, slides.length - 1));
-    slides.forEach((s, j) => s.classList.toggle('active', j === idx));
-    const focusable = slides[idx].querySelector('button, a, input, [tabindex]');
-    if (focusable) focusable.focus();
-  }
+            function endPresentation() {
+                container.classList.remove('presenting');
+                slides.forEach(s => s.classList.remove('active'));
+                document.exitFullscreen?.();
+            }
 
-  function next(){ showSlide(idx + 1); }
-  function prev(){ showSlide(idx - 1); }
+            function toggleFullscreen() {
+                if (document.fullscreenElement) document.exitFullscreen();
+                else document.documentElement.requestFullscreen?.();
+            }
 
-  function startPresentation(){
-    container.classList.add('presenting');
-    document.documentElement.requestFullscreen?.();
-    showSlide(0);
-  }
+            document.addEventListener('keydown', (e) => {
+                if (!container.classList.contains('presenting')) {
+                    if (e.key === 'F5') { e.preventDefault(); startPresentation(); return; }
+                    return;
+                }
+                if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); next(); }
+                if (['ArrowLeft', 'PageUp', 'Backspace'].includes(e.key)) { e.preventDefault(); prev(); }
+                if (e.key === 'Escape') { e.preventDefault(); endPresentation(); }
+                if (e.key.toLowerCase() === 'f') { e.preventDefault(); toggleFullscreen(); }
+            });
 
-  function endPresentation(){
-    container.classList.remove('presenting');
-    slides.forEach(s => s.classList.remove('active'));
-    document.exitFullscreen?.();
-  }
+            let wheelTimeout = null;
+            document.addEventListener('wheel', (e) => {
+                if (!container.classList.contains('presenting')) return;
+                e.preventDefault();
+                if (wheelTimeout) return;
+                if (e.deltaY > 0) next(); else prev();
+                wheelTimeout = setTimeout(() => wheelTimeout = null, 300);
+            }, { passive: false });
 
-  function toggleFullscreen(){
-    if (document.fullscreenElement) document.exitFullscreen();
-    else document.documentElement.requestFullscreen?.();
-  }
+            let touchStartY = null;
+            document.addEventListener('touchstart', (e) => {
+                if (!container.classList.contains('presenting')) return;
+                touchStartY = e.touches[0].clientY;
+            }, { passive: true });
+            document.addEventListener('touchend', (e) => {
+                if (touchStartY === null || !container.classList.contains('presenting')) return;
+                const dy = (e.changedTouches[0].clientY - touchStartY);
+                if (Math.abs(dy) > 40) { if (dy < 0) next(); else prev(); }
+                touchStartY = null;
+            });
 
-  document.addEventListener('keydown', (e) => {
-    if (!container.classList.contains('presenting')) {
-      if (e.key === 'F5') { e.preventDefault(); startPresentation(); return; }
-      return;
-    }
-    if (['ArrowRight','PageDown',' '].includes(e.key)) { e.preventDefault(); next(); }
-    if (['ArrowLeft','PageUp','Backspace'].includes(e.key)) { e.preventDefault(); prev(); }
-    if (e.key === 'Escape') { e.preventDefault(); endPresentation(); }
-    if (e.key.toLowerCase() === 'f') { e.preventDefault(); toggleFullscreen(); }
-  });
+            const nav = document.createElement('div');
+            nav.className = 'slide-nav';
+            nav.innerHTML = '<button id="prev">Предишен</button><button id="toggleFS">Режим Презентация</button><button id="next">Следващ</button>';
+            document.body.appendChild(nav);
 
-  let wheelTimeout = null;
-  document.addEventListener('wheel', (e) => {
-    if (!container.classList.contains('presenting')) return;
-    e.preventDefault();
-    if (wheelTimeout) return;
-    if (e.deltaY > 0) next(); else prev();
-    wheelTimeout = setTimeout(() => wheelTimeout = null, 300);
-  }, { passive: false });
+            nav.querySelector('#prev').addEventListener('click', () => {
+                if (!container.classList.contains('presenting')) startPresentation();
+                else prev();
+            });
+            nav.querySelector('#next').addEventListener('click', () => {
+                if (!container.classList.contains('presenting')) startPresentation();
+                else next();
+            });
+            nav.querySelector('#toggleFS').addEventListener('click', () => {
+                toggleFullscreen();
+                if (!container.classList.contains('presenting')) startPresentation();
+            });
 
-  let touchStartY = null;
-  document.addEventListener('touchstart', (e) => {
-    if (!container.classList.contains('presenting')) return;
-    touchStartY = e.touches[0].clientY;
-  }, { passive: true });
-  document.addEventListener('touchend', (e) => {
-    if (touchStartY === null || !container.classList.contains('presenting')) return;
-    const dy = (e.changedTouches[0].clientY - touchStartY);
-    if (Math.abs(dy) > 40) { if (dy < 0) next(); else prev(); }
-    touchStartY = null;
-  });
-
-  const nav = document.createElement('div');
-  nav.className = 'slide-nav';
-  nav.innerHTML = '<button id="prev">Предишен</button><button id="toggleFS">Режим Презентация</button><button id="next">Следващ</button>';
-  document.body.appendChild(nav);
-
-  nav.querySelector('#prev').addEventListener('click', () => {
-    if (!container.classList.contains('presenting')) startPresentation();
-    else prev();
-  });
-  nav.querySelector('#next').addEventListener('click', () => {
-    if (!container.classList.contains('presenting')) startPresentation();
-    else next();
-  });
-  nav.querySelector('#toggleFS').addEventListener('click', () => {
-    toggleFullscreen();
-    if (!container.classList.contains('presenting')) startPresentation();
-  });
-
-  showSlide(0);
-})();
-</script>
+            showSlide(0);
+        })();
+    </script>
 </body>
+
 </html>

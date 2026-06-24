@@ -52,10 +52,17 @@ def insert_vehicle(
             vehicle_uuid=str(uuid.uuid4()),
             encrypted_embedding=encrypted_embedding,
             encrypted_metadata=encrypted_metadata,
+<<<<<<< HEAD
+            license_plate=license_plate,  
+            color=color,                  
+            body_type=body_type,          
+            image_path=image_path,        
+=======
             license_plate=license_plate,  # Plaintext
             color=color,                  # Plaintext
             body_type=body_type,          # Plaintext
             image_path=image_path,        # Plaintext
+>>>>>>> 53c138d07e9fe2796f830eb79d6f610bd9146439
         )
         
         db.add(vehicle)
@@ -76,9 +83,12 @@ def pir_search_true(
     top_k: int = 10,
     verbose: bool = False,
 ) -> List[Dict]:
+<<<<<<< HEAD
+=======
     """
     TRUE PIR търсене - използва САМО криптирани данни.
     """
+>>>>>>> 53c138d07e9fe2796f830eb79d6f610bd9146439
     db = get_db()
     
     try:
@@ -95,8 +105,13 @@ def pir_search_true(
         vehicles = db.query(Vehicle).all()
         
         if verbose:
+<<<<<<< HEAD
+            print(f"Подготовка на заявката: {prep_time*1000:.2f}ms")
+            print(f"Сканиране от сървъра: {len(vehicles)} vehicles")
+=======
             print(f"Query prep: {prep_time*1000:.2f}ms")
             print(f"Server scanning: {len(vehicles)} vehicles")
+>>>>>>> 53c138d07e9fe2796f830eb79d6f610bd9146439
         
         if not vehicles:
             return []
@@ -125,7 +140,11 @@ def pir_search_true(
         
         for r in encrypted_results:
             sim = decrypt_embedding_simple(r["encrypted_similarity"])
+<<<<<<< HEAD
+            score = float(sim[0])
+=======
             score = float(sim[1])
+>>>>>>> 53c138d07e9fe2796f830eb79d6f610bd9146439
             
             decrypted.append({
                 "vehicle_id": r["vehicle_id"],
@@ -163,7 +182,11 @@ def pir_search_true(
         if verbose:
             total = prep_time + server_time
             print(f"Server time: {server_time*1000:.2f}ms")
+<<<<<<< HEAD
+            print(f"Общо: {total*1000:.2f}ms")
+=======
             print(f"Total PIR: {total*1000:.2f}ms")
+>>>>>>> 53c138d07e9fe2796f830eb79d6f610bd9146439
         
         return final_results
         
@@ -218,7 +241,10 @@ def delete_vehicle(vehicle_uuid: str) -> bool:
 
 
 def get_database_stats() -> Dict:
+<<<<<<< HEAD
+=======
     """Статистика за базата данни"""
+>>>>>>> 53c138d07e9fe2796f830eb79d6f610bd9146439
     db = get_db()
     
     try:
@@ -239,7 +265,10 @@ def get_database_stats() -> Dict:
 
 
 def get_encryption_stats() -> Dict:
+<<<<<<< HEAD
+=======
     """Статистика за криптирането"""
+>>>>>>> 53c138d07e9fe2796f830eb79d6f610bd9146439
     stats = get_database_stats()
     
     plain_size = 256 * 4
