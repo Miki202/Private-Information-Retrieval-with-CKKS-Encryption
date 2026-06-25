@@ -33,8 +33,7 @@ st.markdown(
       <ul style="display:inline-block; text-align:left; padding:0 20px; margin:0; list-style: none;">
         <li style="margin:6px 0;"><strong>Локално извличане на характеристики</strong> със CNN енкодер</li>
         <li style="margin:6px 0;"><strong>Генериране на ембединги</strong> за заявката</li>
-        <li style="margin:6px 0;"><strong>Stage 1: Bucketization</strong> — филтриране по цвят / рег. номер</li>
-        <li style="margin:6px 0;"><strong>Stage 2: Криптиране на заявката</strong> (PIR)</li>
+        <li style="margin:6px 0;"><strong>Криптиране на заявката</strong> (PIR)</li>
         <li style="margin:6px 0;"><strong>Хомоморфно сравнение</strong> върху криптирани данни</li>
         <li style="margin:6px 0;"><strong>Декриптиране и връщане</strong> само на ранкирани топ резултати</li>
       </ul>
