@@ -152,8 +152,6 @@ def pir_search_true(
         final_results = []
 
         for r in top_results:
-            meta = decrypt_metadata(r["encrypted_metadata"])
-
             v = db.query(Vehicle).filter(
                 Vehicle.id == r["vehicle_id"]
             ).first()
@@ -163,14 +161,14 @@ def pir_search_true(
                     "vehicle": {
                         "id": v.id,
                         "uuid": v.vehicle_uuid,
-                        "license_plate": meta.get("license_plate"),
-                        "color": meta.get("color"),
-                        "body_type": meta.get("body_type"),
-                        "image_path": meta.get("image_path"),
+                        "license_plate": v.license_plate,  
+                        "color": v.color,                 
+                        "body_type": v.body_type,          
+                        "image_path": v.image_path,       
                     },
                     "similarity_score": r["score"],
                 })
-
+                
         if verbose:
             total = prep_time + server_time
             print(f"Stage 2 (Homomorphic): {server_time*1000:.2f}ms")
