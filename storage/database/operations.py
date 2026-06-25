@@ -73,12 +73,12 @@ def pir_search_true(
     query_embedding: np.ndarray,
     top_k: int = 10,
     filter_color: Optional[str] = None,
-    filter_body_type: Optional[str] = None,
+    filter_plate: Optional[str] = None,
     verbose: bool = False,
 ) -> List[Dict]:
     """
     Two-Stage PIR търсене:
-      Stage 1: SQL bucket filtering
+      Stage 1: SQL bucket filtering (цвят + рег. номер)
       Stage 2: Homomorphic similarity scan (върху криптирани embeddings)
     """
     db = get_db()
@@ -96,8 +96,8 @@ def pir_search_true(
 
         if filter_color:
             query = query.filter(Vehicle.color == filter_color)
-        if filter_body_type:
-            query = query.filter(Vehicle.body_type == filter_body_type)
+        if filter_plate:
+            query = query.filter(Vehicle.license_plate.ilike(f"%{filter_plate}%"))
 
         vehicles = query.all()
 
@@ -107,8 +107,8 @@ def pir_search_true(
             print(f"Stage 1 (Bucket): {len(vehicles)}/{total_in_db} vehicles")
             if filter_color:
                 print(f"  Filter: color = '{filter_color}'")
-            if filter_body_type:
-                print(f"  Filter: body_type = '{filter_body_type}'")
+            if filter_plate:
+                print(f"  Filter: plate LIKE '%{filter_plate}%'")
 
         if not vehicles:
             return []
