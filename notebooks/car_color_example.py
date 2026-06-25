@@ -1,41 +1,13 @@
-"""
-Car colour extraction — minimal usage example.
-
-No ML model needed. Given an *already cropped* car image (the output of
-your YOLO vehicle detector), we:
-
-  1) Centre-crop 60% of the bbox to bias away from background / wheels / sky.
-  2) Down-sample for speed.
-  3) Convert every pixel to HSV.
-  4) Bucket each pixel into a named colour using simple HSV rules.
-  5) Return the most common bucket as the dominant car colour.
-
-Accuracy on typical marketplace photos: ~85-90%. The remaining ~10% are
-edge cases (two-tone paint, heavy reflections, unusual lighting) that
-need a trained CNN to handle properly.
-
-Usage:
-    from car_color_example import extract_color
-    result = extract_color(pil_cropped_car)
-    print(result["name"])         # e.g. "red"
-    print(result["share"])        # e.g. 0.43  (43% of central pixels)
-    print(result["distribution"]) # full bucket histogram
-"""
 from collections import Counter
 from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
+CENTER_CROP_RATIO = 0.60     
+RESIZE_TO         = 128      
+ACHROMATIC_SAT    = 0.15     
 
-CENTER_CROP_RATIO = 0.60     # keep central 60% of width/height
-RESIZE_TO         = 128      # downsample longest side to this many px
-ACHROMATIC_SAT    = 0.15     # below this saturation -> grey scale family
-
-
-# ---------------------------------------------------------------------------
-# HSV bucketing
-# ---------------------------------------------------------------------------
 def _rgb_to_hsv_arr(rgb01: np.ndarray) -> np.ndarray:
     """Vectorised RGB -> HSV (all in [0, 1]). Input shape (N, 3)."""
     r, g, b = rgb01[:, 0], rgb01[:, 1], rgb01[:, 2]
@@ -45,8 +17,6 @@ def _rgb_to_hsv_arr(rgb01: np.ndarray) -> np.ndarray:
 
     delta = maxc - minc
     s = np.where(maxc > 0, delta / np.maximum(maxc, 1e-9), 0.0)
-
-    # Hue computation (degrees / 360)
     h = np.zeros_like(maxc)
     mask = delta > 1e-9
 
@@ -64,7 +34,6 @@ def _rgb_to_hsv_arr(rgb01: np.ndarray) -> np.ndarray:
 
 
 def _classify_hsv(hsv: np.ndarray) -> np.ndarray:
-    """Map HSV pixels to a category name. Returns np.ndarray of strings."""
     h, s, v = hsv[:, 0] * 360.0, hsv[:, 1], hsv[:, 2]
 
     labels = np.empty(len(hsv), dtype=object)
@@ -93,50 +62,24 @@ def _classify_hsv(hsv: np.ndarray) -> np.ndarray:
     return labels
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
 def extract_color(
     pil_car: Image.Image,
     center_crop_ratio: float = CENTER_CROP_RATIO,
 ) -> dict:
-    """
-    Args:
-        pil_car: already-cropped vehicle image (output of YOLO + crop).
-        center_crop_ratio: fraction of width/height to keep in the centre.
-
-    Returns:
-        {
-            "name":         most common bucket, e.g. "red",
-            "share":        fraction of pixels in that bucket (0-1),
-            "distribution": dict bucket -> share, sorted desc,
-            "rgb_estimate": (R, G, B) — median colour of the winning bucket,
-            "hex":          "#RRGGBB" estimate,
-        }
-    """
     pil_car = pil_car.convert("RGB")
 
-    # 1) Centre crop to avoid background bias
     w, h = pil_car.size
     cw, ch = int(w * center_crop_ratio), int(h * center_crop_ratio)
     x1, y1 = (w - cw) // 2, (h - ch) // 2
     crop = pil_car.crop((x1, y1, x1 + cw, y1 + ch))
-
-    # 2) Downsample for speed (preserve aspect)
     crop.thumbnail((RESIZE_TO, RESIZE_TO), Image.BILINEAR)
-
-    # 3) HSV bucketing
     rgb = np.asarray(crop, dtype=np.float32).reshape(-1, 3) / 255.0
     hsv = _rgb_to_hsv_arr(rgb)
     labels = _classify_hsv(hsv)
-
-    # 4) Vote
     counts = Counter(labels.tolist())
     total = sum(counts.values())
     distribution = {k: v / total for k, v in counts.most_common()}
     top_name, top_count = counts.most_common(1)[0]
-
-    # 5) Median RGB of winning bucket (for visualisation / debugging)
     winners = rgb[labels == top_name]
     median_rgb = (np.median(winners, axis=0) * 255).astype(int)
     hex_color = "#{:02X}{:02X}{:02X}".format(*median_rgb)
@@ -149,10 +92,6 @@ def extract_color(
         "hex":          hex_color,
     }
 
-
-# ---------------------------------------------------------------------------
-# Demo
-# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     import sys
 

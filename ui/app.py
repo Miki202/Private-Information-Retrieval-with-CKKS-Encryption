@@ -4,7 +4,7 @@ from PIL import Image
 import time
 import sys
 
-from ui.utils import load_encoder_model, encode_image
+from utils import encode_image
 from storage.database.operations import (
     pir_search_true,
     get_all_vehicles
@@ -42,15 +42,7 @@ st.markdown(
 
 st.divider()
 
-@st.cache_resource
-def get_model():
-    try:
-        model, device = load_encoder_model("encoder.pth")
-        return model, device, True
-    except Exception:
-        return None, None, False
-
-model, device, model_loaded = get_model()
+model_loaded = True
 
 def show_step(step_container, text, delay=1.0):
     with step_container:
@@ -99,7 +91,7 @@ if query_img:
                 show_step(step, "Encoder не е наличен - използва се демо режим")
                 embedding = None
             else:
-                embedding = encode_image(image, model, device)
+                embedding = encode_image(image)
 
             show_step(step, "Стъпка 3: Подготовка на PIR заявка")
             show_step(step, "Стъпка 4: Изпращане на криптирана заявка към сървъра")
@@ -140,11 +132,11 @@ if query_img:
         for i, r in enumerate(results, 1):
             v = r["vehicle"]
             rows.append({
-                "Ранг": i,
-                "Сходство": f"{r['similarity_score'] * 100:.2f}%",
-                "Регистрационен номер": v.get("license_plate"),
-                "Цвят": v.get("color"),
-                "Тип": v.get("body_type"),
+                "Идентификатор": v.get("vehicle_uuid"),
+                "Регистрационен номер": v.get("license_plate") or "—",
+                "Цвят": v.get("color") or "—",
+                "Снимка": v.get("image_path") or "—",
+                "Сходство": f"{r['similarity_score']:.4f}"
             })
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
@@ -173,16 +165,15 @@ with st.expander("Сървърен изглед на базата данни"):
             total_bytes = sys.getsizeof(v)
 
         size_kb = total_bytes/1024
-
+        
         rows.append({
-            "ID запис": v.id,
             "Идентификатор": f"ENC00{v.id}" if v.id < 10 else f"ENC0{v.id}",
-            "Статус на метаданните": "🔒 Криптирани (AES/HE)",
-            "Видимост за сървъра": "Нулева (Blind Server)",
+            "Регистрационен номер": f"Криптиран {v.license_plate}" if v.license_plate else "Kриптиран",
+            "Цвят": f"Криптиран {v.color}" if v.color else "Kриптиран",
+            "Видимост за сървъра": "🔒 Нулева (Blind Server)",
             "Реален размер на данните": f"{size_kb:.2f} KB",
             "Системен UUID": v.vehicle_uuid
         })
-
     if rows:
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
     else:
